@@ -1,0 +1,694 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════
+   Design tokens — LearnHub-inspired for Solar Panel TH
+═══════════════════════════════════════════════════════ */
+:root {
+  /* Brand */
+  --color-primary:       #0262EC;
+  --color-primary-dark:  #0040c8;
+  --color-primary-light: #e8f0fe;
+  --color-secondary:     #0282FB;
+  --color-accent:        #FD6902;
+  --color-accent-dark:   #e55a00;
+  --color-gold:          #D4AF37;
+
+  /* Surfaces */
+  --color-bg:         #ffffff;
+  --color-bg-alt:     #f8faff;
+  --color-bg-dark:    #0f1f4b;
+  --color-surface:    #ffffff;
+  --color-surface-2:  #f1f5f9;
+
+  /* Text */
+  --color-text:         #0f1f4b;
+  --color-text-light:   #334155;
+  --color-muted:        #64748b;
+  --color-muted-light:  #94a3b8;
+
+  /* Borders */
+  --color-border:       #e2e8f0;
+  --color-border-dark:  #cbd5e1;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm:  0 2px 8px rgba(15,31,75,0.06);
+  --shadow-md:  0 4px 20px rgba(15,31,75,0.10);
+  --shadow-lg:  0 8px 40px rgba(15,31,75,0.14);
+  --shadow-xl:  0 16px 60px rgba(15,31,75,0.18);
+
+  /* Radius */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-full: 9999px;
+}
+
+@theme inline {
+  --color-primary:       var(--color-primary);
+  --color-primary-dark:  var(--color-primary-dark);
+  --color-primary-light: var(--color-primary-light);
+  --color-secondary:     var(--color-secondary);
+  --color-accent:        var(--color-accent);
+  --color-accent-dark:   var(--color-accent-dark);
+  --color-gold:          var(--color-gold);
+  --color-bg:            var(--color-bg);
+  --color-bg-alt:        var(--color-bg-alt);
+  --color-bg-dark:       var(--color-bg-dark);
+  --color-surface:       var(--color-surface);
+  --color-surface-2:     var(--color-surface-2);
+  --color-text:          var(--color-text);
+  --color-text-light:    var(--color-text-light);
+  --color-muted:         var(--color-muted);
+  --color-muted-light:   var(--color-muted-light);
+  --color-border:        var(--color-border);
+  --color-border-dark:   var(--color-border-dark);
+}
+
+/* ── Reset ─────────────────────────────────────────── */
+*,*::before,*::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sarabun, 'Sarabun'), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-alt); }
+::-webkit-scrollbar-thumb { background: var(--color-border-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* ── Focus ──────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* ── Container ──────────────────────────────────────── */
+.container {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+/* ── Typography ─────────────────────────────────────── */
+h1,h2,h3,h4,h5,h6 {
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--color-text);
+}
+a { color: inherit; text-decoration: none; }
+
+/* ── Line clamp ─────────────────────────────────────── */
+.line-clamp-1 { display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden; }
+.line-clamp-2 { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+.line-clamp-3 { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
+
+/* ══════════════════════════════════════════════════════
+   BUTTONS — LearnHub style
+══════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6875rem 1.5rem;
+  border-radius: var(--radius-full);   /* pill — LearnHub style */
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* Primary — orange (accent) CTA like LearnHub */
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 15px rgba(253,105,2,0.3);
+}
+.btn-primary:hover {
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+  box-shadow: 0 6px 20px rgba(253,105,2,0.4);
+  transform: translateY(-1px);
+}
+
+/* Blue CTA */
+.btn-blue {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 15px rgba(2,98,236,0.25);
+}
+.btn-blue:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  box-shadow: 0 6px 20px rgba(2,98,236,0.35);
+  transform: translateY(-1px);
+}
+
+/* Secondary — outline */
+.btn-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-dark);
+}
+.btn-secondary:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+/* Outline white — for dark bg */
+.btn-outline-white {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255,255,255,0.5);
+}
+.btn-outline-white:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.8);
+}
+
+/* Outline (blue) — for OAuth buttons etc. */
+.btn-outline {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-border-dark);
+}
+.btn-outline:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text);
+  border-color: transparent;
+}
+.btn-ghost:hover { background: var(--color-surface-2); }
+
+/* Sizes */
+.btn-xl  { padding: 1rem 2rem;        font-size: 1.0625rem; border-radius: var(--radius-full); }
+.btn-lg  { padding: 0.8125rem 1.75rem; font-size: 1rem;      border-radius: var(--radius-full); }
+.btn-sm  { padding: 0.4375rem 1rem;    font-size: 0.8125rem; border-radius: var(--radius-full); }
+.btn-xs  { padding: 0.3125rem 0.75rem; font-size: 0.75rem;   border-radius: var(--radius-full); }
+
+/* ══════════════════════════════════════════════════════
+   CARDS — LearnHub style
+══════════════════════════════════════════════════════ */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+/* Static variant for large containers (modals, panels) — no hover-lift,
+   which otherwise causes a hover/unhover flicker loop on big elements. */
+.card-static {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+/* ══════════════════════════════════════════════════════
+   SECTION LAYOUT — LearnHub spacing
+══════════════════════════════════════════════════════ */
+.section    { padding: 5rem 0; }
+.section-sm { padding: 3rem 0; }
+.section-lg { padding: 7rem 0; }
+
+/* Section heading pattern (eyebrow + h2 + sub) */
+.section-eyebrow {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.75rem;
+}
+.section-title {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1.2;
+  margin-bottom: 0.875rem;
+}
+.section-sub {
+  font-size: 1rem;
+  color: var(--color-muted);
+  line-height: 1.7;
+  max-width: 580px;
+}
+.section-header { text-align: center; margin-bottom: 3rem; }
+.section-header .section-sub { margin-inline: auto; }
+
+/* ══════════════════════════════════════════════════════
+   FORM ELEMENTS
+══════════════════════════════════════════════════════ */
+.form-group { display: flex; flex-direction: column; gap: 0.375rem; }
+.form-label { font-size: 0.875rem; font-weight: 600; color: var(--color-text); }
+.form-input {
+  width: 100%;
+  padding: 0.6875rem 1rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(2,98,236,0.1);
+}
+.form-input::placeholder { color: var(--color-muted-light); }
+.form-input.error { border-color: #ef4444; }
+.form-hint  { font-size: 0.8rem; color: var(--color-muted); }
+.form-error { font-size: 0.8rem; color: #ef4444; }
+
+/* ══════════════════════════════════════════════════════
+   BADGES
+══════════════════════════════════════════════════════ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-primary { background: rgba(2,98,236,0.08); color: var(--color-primary); }
+.badge-accent  { background: rgba(253,105,2,0.08); color: var(--color-accent);  }
+.badge-success { background: rgba(16,185,129,0.08); color: #059669; }
+.badge-warning { background: rgba(245,158,11,0.1);  color: #d97706; }
+.badge-gold    { background: rgba(212,175,55,0.08); color: #92711a; }
+
+/* Trust badges (detail page) */
+.tbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.875rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.tbadge.green { background: #d1fae5; color: #065f46; }
+.tbadge.amber { background: #fef3c7; color: #92400e; }
+.tbadge.blue  { background: #dbeafe; color: #1e40af; }
+.tbadge.gray  { background: #f3f4f6; color: #6b7280; }
+
+/* ══════════════════════════════════════════════════════
+   PAGE HEADER (sub-pages)
+══════════════════════════════════════════════════════ */
+.page-header {
+  background: linear-gradient(135deg, #0f1f4b 0%, #0262EC 100%);
+  color: #fff;
+  padding: 3.5rem 0 3rem;
+  position: relative;
+  overflow: hidden;
+}
+.page-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='3'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.page-header .breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  opacity: 0.7;
+  margin-bottom: 1rem;
+}
+.page-header .breadcrumb a { opacity: 0.85; }
+.page-header .breadcrumb a:hover { opacity: 1; text-decoration: underline; }
+.page-header h1 { font-size: clamp(1.625rem, 3vw, 2.125rem); font-weight: 800; color: #fff; margin-bottom: 0.5rem; }
+.page-header p  { opacity: 0.8; font-size: 1rem; }
+
+/* ══════════════════════════════════════════════════════
+   STAR RATING
+══════════════════════════════════════════════════════ */
+.stars-wrap {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+}
+.stars-base { color: #e2e8f0; }
+.stars-fill {
+  position: absolute; top: 0; left: 0;
+  overflow: hidden; white-space: nowrap;
+  color: #f59e0b;
+}
+
+/* ══════════════════════════════════════════════════════
+   ALERTS
+══════════════════════════════════════════════════════ */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1.125rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+.alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.alert-error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.alert-info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.alert-warning { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+
+/* ══════════════════════════════════════════════════════
+   SKELETON
+══════════════════════════════════════════════════════ */
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ══════════════════════════════════════════════════════
+   DIVIDER
+══════════════════════════════════════════════════════ */
+.divider { height: 1px; background: var(--color-border); margin: 1.5rem 0; }
+
+/* ══════════════════════════════════════════════════════
+   NAVBAR — LearnHub style
+══════════════════════════════════════════════════════ */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 10px rgba(15,31,75,0.06);
+  transition: box-shadow 0.2s;
+}
+.navbar-inner {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.navbar-logo .logo-sun {
+  width: 48px; height: 48px;
+  background: linear-gradient(135deg, var(--color-accent), #fbbf24);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(253,105,2,0.3);
+}
+.navbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  justify-content: center;
+}
+.navbar-nav-link {
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text-light);
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.navbar-nav-link:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.navbar-nav-link.active {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  font-weight: 600;
+}
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════
+   FOOTER — LearnHub dark style
+══════════════════════════════════════════════════════ */
+.footer {
+  background: var(--color-bg-dark);
+  color: rgba(255,255,255,0.75);
+}
+.footer-brand-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 0.875rem;
+}
+.footer-tagline {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.55);
+  max-width: 260px;
+}
+.footer-heading {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 1.125rem;
+  letter-spacing: 0.01em;
+}
+.footer-link {
+  display: block;
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.55);
+  transition: color 0.18s;
+  padding: 0.25rem 0;
+}
+.footer-link:hover { color: #fff; }
+.footer-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 2.5rem 0 1.75rem;
+}
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: rgba(255,255,255,0.35);
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* ══════════════════════════════════════════════════════
+   FEATURE ICON BOX — LearnHub style
+══════════════════════════════════════════════════════ */
+.icon-box {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.625rem;
+  flex-shrink: 0;
+}
+.icon-box-blue   { background: #eff6ff; }
+.icon-box-orange { background: #fff7ed; }
+.icon-box-green  { background: #f0fdf4; }
+.icon-box-purple { background: #faf5ff; }
+
+/* ══════════════════════════════════════════════════════
+   INSTALLER CARD — LearnHub course card style
+══════════════════════════════════════════════════════ */
+.inst-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  /* NO overflow:hidden here — let logo overlap without clipping */
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+.inst-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+.inst-card-cover {
+  position: relative;
+  height: 140px;
+  overflow: hidden;      /* clips gradient bg + decorative elements */
+  flex-shrink: 0;
+  /* round only the top two corners to match card's border-radius */
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+.inst-card-logo {
+  /* sits between cover and body, overlapping via negative margin */
+  padding: 0 1rem;
+  margin-top: -28px;     /* pull up by half the logo height (56px/2) */
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.inst-card-logo-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #fff;
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+.inst-card-body {
+  padding: 1.25rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 220px;
+}
+
+/* ══════════════════════════════════════════════════════
+   BLOG CARD
+══════════════════════════════════════════════════════ */
+.blog-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.25s, transform 0.25s;
+  box-shadow: var(--shadow-sm);
+}
+.blog-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+.blog-card-img {
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.blog-card-img img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.blog-card:hover .blog-card-img img { transform: scale(1.05); }
+.blog-card-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* ══════════════════════════════════════════════════════
+   STEP CARD (how it works)
+══════════════════════════════════════════════════════ */
+.step-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  padding: 2rem 1.75rem;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.25s, transform 0.25s;
+  box-shadow: var(--shadow-sm);
+}
+.step-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+.step-card-number {
+  position: absolute;
+  top: 1rem; right: 1.25rem;
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--color-border);
+  line-height: 1;
+  user-select: none;
+}
+
+/* ══════════════════════════════════════════════════════
+   CTA BANNER
+══════════════════════════════════════════════════════ */
+.cta-banner {
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%);
+  border-radius: var(--radius-xl);
+  padding: 3.5rem 2.5rem;
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+}
+.cta-banner h1,
+.cta-banner h2,
+.cta-banner h3 { color: #fff; }
+.cta-banner::after {
+  content: '☀️';
+  position: absolute;
+  right: 2.5rem; top: 50%; transform: translateY(-50%);
+  font-size: 8rem;
+  opacity: 0.07;
+  pointer-events: none;
+  user-select: none;
+}
+.cta-banner-ring {
+  position: absolute;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════
+   STATS PILL
+══════════════════════════════════════════════════════ */
+.stat-number { font-size: 2.5rem; font-weight: 900; line-height: 1; }
+.stat-label  { font-size: 0.8125rem; color: var(--color-muted); margin-top: 0.25rem; }

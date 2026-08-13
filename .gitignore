@@ -1,0 +1,12 @@
+# User-uploaded files — local disk storage, not source. Migrate to object storage for production.
+/uploads/
+
+# Legacy SQLite DB files — replaced by Postgres (Neon). Kept locally as rollback reference only,
+# contains real user/lead data so must never be committed.
+*.db
+*.db-shm
+*.db-wal
+
+# OS / editor
+.DS_Store
+Thumbs.db
