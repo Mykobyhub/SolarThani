@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ===== Solar Thani — VPS First-Time Setup =====
+# รันสคริปต์นี้ "บน VPS จริง" ผ่าน SSH เท่านั้น (ไม่ใช่รันจากเครื่อง dev)
+#
+# ข้อกำหนดก่อนรัน:
+#   - Ubuntu/Debian VPS พร้อม sudo access
+#   - DNS ของ solarthani.com และ www.solarthani.com ชี้มาที่ IP ของ VPS นี้แล้ว (รอ propagate ให้เรียบร้อยก่อน)
+#   - Clone repo นี้ไว้ที่ APP_DIR ด้านล่างแล้ว (git clone https://github.com/Mykobyhub/SolarThani.git)
+#   - วางไฟล์ frontend/.env.production ให้ครบ (DATABASE_URL, JWT_SECRET, SMTP_*, UPLOADS_DIR ฯลฯ)
+#   - ย้ายโฟลเดอร์ uploads/ เดิม (จากเครื่อง dev) มาไว้ที่ path ตรงกับ UPLOADS_DIR ใน .env.production แล้ว
+#
+# วิธีรัน:
+#   chmod +x deploy/setup-vps.sh
+#   ./deploy/setup-vps.sh
+
+set -euo pipefail
+
+DOMAIN="solarthani.com"
+WWW_DOMAIN="www.solarthani.com"
+APP_DIR="/var/www/solarthani"      # แก้ให้ตรงกับ path จริงที่ clone repo ไว้บน VPS
+LE_EMAIL="admin@solarthani.com"     # แก้เป็นอีเมลจริงสำหรับแจ้งเตือน SSL cert ใกล้หมดอายุ
+
+echo "==> [1/6] Installing Node.js 22..."
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+echo "==> [2/6] Installing nginx + certbot..."
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+
+echo "==> [3/6] Installing PM2..."
+sudo npm install -g pm2
+
+echo "==> [4/6] Installing dependencies + building app..."
+cd "$APP_DIR/frontend"
+npm ci
+npm run build
+
+echo "==> [5/6] Configuring nginx reverse proxy..."
+sudo mkdir -p /var/www/certbot
+sudo cp "$APP_DIR/deploy/nginx/solarthani.com.conf" /etc/nginx/sites-available/solarthani.com
+sudo ln -sf /etc/nginx/sites-available/solarthani.com /etc/nginx/sites-enabled/solarthani.com
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+
+echo "==> Obtaining SSL certificate (Let's Encrypt)..."
+sudo certbot --nginx -d "$DOMAIN" -d "$WWW_DOMAIN" --non-interactive --agree-tos -m "$LE_EMAIL" --redirect
+
+echo "==> [6/6] Starting app with PM2..."
+cd "$APP_DIR"
+pm2 start deploy/ecosystem.config.js
+pm2 save
+pm2 startup systemd -u "$USER" --hp "$HOME" | tail -1 | sudo bash
+
+echo ""
+echo "==> เสร็จแล้ว! ตรวจสอบด้วย:"
+echo "    pm2 status                 — ดูสถานะ app"
+echo "    pm2 logs solarthani        — ดู log"
+echo "    sudo systemctl status nginx"
+echo "    curl -I https://$DOMAIN"

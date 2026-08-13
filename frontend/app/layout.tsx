@@ -22,7 +22,7 @@ async function getSiteSettings() {
 export async function generateMetadata(): Promise<Metadata> {
   const { logoUrl } = await getSiteSettings();
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sorathani.com'),
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://solarthani.com'),
     title: {
       default: 'Solar Thani — ค้นหาผู้ติดตั้งโซลาร์เซลล์',
       template: '%s | Solar Thani',

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
-import { join, resolve } from 'path';
-
-const UPLOADS_ROOT = resolve(process.cwd(), '..', 'uploads');
+import { join } from 'path';
+import { UPLOADS_ROOT } from '@/lib/upload';
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
