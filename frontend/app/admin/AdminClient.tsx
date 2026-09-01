@@ -1078,6 +1078,8 @@ function TermsTab({ initialJson, onSave }: { initialJson: string; onSave: (json:
 function SettingsTab({ contentMap }: { contentMap: Record<string, string> }) {
   const [smtpUser, setSmtpUser] = useState(contentMap['smtp_user'] || '');
   const [smtpPass, setSmtpPass] = useState('');
+  const [smtpHost, setSmtpHost] = useState(contentMap['smtp_host'] || 'smtp.hostinger.com');
+  const [smtpPort, setSmtpPort] = useState(contentMap['smtp_port'] || '465');
   const [testLoading, setTestLoading] = useState(false);
   const [testMsg, setTestMsg] = useState('');
 
@@ -1085,7 +1087,7 @@ function SettingsTab({ contentMap }: { contentMap: Record<string, string> }) {
     const res = await fetch('/api/admin/smtp', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ smtp_user: smtpUser, smtp_pass: smtpPass }),
+      body: JSON.stringify({ smtp_user: smtpUser, smtp_pass: smtpPass, smtp_host: smtpHost, smtp_port: smtpPort }),
     });
     const d = await res.json();
     setTestMsg(d.success ? '✅ บันทึก SMTP แล้ว' : `❌ ${d.error}`);
@@ -1105,13 +1107,22 @@ function SettingsTab({ contentMap }: { contentMap: Record<string, string> }) {
       {testMsg && <div className="alert alert-info mb-4"><span>ℹ️</span> {testMsg}</div>}
       <form onSubmit={(e) => { e.preventDefault(); saveSMTP(); }} className="space-y-4 max-w-sm">
         <div className="form-group">
-          <label className="form-label">SMTP User (Gmail)</label>
-          <input type="email" className="form-input" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="yourmail@gmail.com" />
+          <label className="form-label">SMTP User (อีเมล)</label>
+          <input type="email" className="form-input" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="you@yourdomain.com" />
         </div>
         <div className="form-group">
-          <label className="form-label">App Password</label>
+          <label className="form-label">Password</label>
           <input type="password" className="form-input" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder="••••••••••••••••" />
-          <span className="form-hint">ใช้ Gmail App Password (16 ตัวอักษร)</span>
+          <span className="form-hint">รหัสผ่านอีเมล SMTP ของผู้ให้บริการ (เช่น Hostinger)</span>
+        </div>
+        <div className="form-group">
+          <label className="form-label">SMTP Host</label>
+          <input type="text" className="form-input" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.hostinger.com" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">SMTP Port</label>
+          <input type="text" className="form-input" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="465" />
+          <span className="form-hint">465 = SSL, 587 = STARTTLS</span>
         </div>
         <div className="flex gap-2">
           <button type="submit" className="btn btn-primary btn-sm">💾 บันทึก</button>

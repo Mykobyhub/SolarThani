@@ -9,13 +9,17 @@ export async function GET(req: NextRequest) {
   if (!session || session.role !== 'admin')
     return NextResponse.json({ success: false, message: 'ต้องการสิทธิ์ Admin' }, { status: 403 });
 
-  const u = (await db.prepare(`SELECT value FROM site_content WHERE key='smtp_user'`).get()) as { value: string } | undefined;
-  const p = (await db.prepare(`SELECT value FROM site_content WHERE key='smtp_pass'`).get()) as { value: string } | undefined;
+  const rows = (await db
+    .prepare(`SELECT key, value FROM site_content WHERE key IN ('smtp_user','smtp_pass','smtp_host','smtp_port')`)
+    .all()) as { key: string; value: string }[];
+  const cfg = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
   return NextResponse.json({
     success: true,
-    smtp_user:     u?.value || '',
-    smtp_pass_set: !!(p?.value),
+    smtp_user:     cfg.smtp_user || '',
+    smtp_pass_set: !!cfg.smtp_pass,
+    smtp_host:     cfg.smtp_host || 'smtp.hostinger.com',
+    smtp_port:     cfg.smtp_port || '465',
   });
 }
 
@@ -25,7 +29,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'ต้องการสิทธิ์ Admin' }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
-  const { smtp_user, smtp_pass } = body;
+  const { smtp_user, smtp_pass, smtp_host, smtp_port } = body;
   if (!smtp_user || !smtp_pass)
     return NextResponse.json({ success: false, message: 'กรุณาระบุ smtp_user และ smtp_pass' }, { status: 400 });
 
@@ -34,6 +38,8 @@ export async function PUT(req: NextRequest) {
   );
   await stmt.run('smtp_user', String(smtp_user).trim());
   await stmt.run('smtp_pass', String(smtp_pass).trim());
+  await stmt.run('smtp_host', String(smtp_host || 'smtp.hostinger.com').trim());
+  await stmt.run('smtp_port', String(smtp_port || '465').trim());
 
   return NextResponse.json({ success: true, message: 'บันทึกการตั้งค่า SMTP สำเร็จ' });
 }

@@ -1,14 +1,19 @@
 import nodemailer from 'nodemailer';
 import { db } from './db';
 
-async function getSmtpConfig(): Promise<{ user: string; pass: string }> {
+async function getSmtpConfig(): Promise<{ user: string; pass: string; host: string; port: number; secure: boolean }> {
   const rows = (await db
-    .prepare(`SELECT key, value FROM site_content WHERE key IN ('smtp_user','smtp_pass')`)
+    .prepare(`SELECT key, value FROM site_content WHERE key IN ('smtp_user','smtp_pass','smtp_host','smtp_port')`)
     .all()) as { key: string; value: string }[];
   const cfg = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const host = cfg.smtp_host || process.env.SMTP_HOST || 'smtp.hostinger.com';
+  const port = parseInt(cfg.smtp_port || process.env.SMTP_PORT || '465', 10);
   return {
     user: cfg.smtp_user || process.env.SMTP_USER || '',
     pass: cfg.smtp_pass || process.env.SMTP_PASS || '',
+    host,
+    port,
+    secure: port === 465,
   };
 }
 
@@ -20,11 +25,11 @@ async function getSiteLogoUrl(): Promise<string> {
 }
 
 async function createTransport() {
-  const { user, pass } = await getSmtpConfig();
+  const { user, pass, host, port, secure } = await getSmtpConfig();
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    host,
+    port,
+    secure,
     auth: { user, pass },
   });
 }
