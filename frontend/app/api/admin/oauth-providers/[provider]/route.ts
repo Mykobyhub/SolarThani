@@ -14,11 +14,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ prov
     return NextResponse.json({ success: false, message: 'ไม่รองรับ provider นี้' }, { status: 400 });
 
   const body = await req.json().catch(() => ({}));
-  const { client_id = '', client_secret = '', active = 0 } = body;
+  const { client_id = '', client_secret, active = 0 } = body;
 
-  await db.prepare(
-    'UPDATE oauth_providers SET client_id=?, client_secret=?, active=? WHERE provider=?'
-  ).run(String(client_id).trim(), String(client_secret).trim(), active ? 1 : 0, provider);
+  // client_secret is write-only in the admin UI: an empty/omitted value means
+  // "leave the currently saved secret unchanged" rather than wiping it out.
+  const newSecret = typeof client_secret === 'string' ? client_secret.trim() : '';
+  if (newSecret) {
+    await db.prepare(
+      'UPDATE oauth_providers SET client_id=?, client_secret=?, active=? WHERE provider=?'
+    ).run(String(client_id).trim(), newSecret, active ? 1 : 0, provider);
+  } else {
+    await db.prepare(
+      'UPDATE oauth_providers SET client_id=?, active=? WHERE provider=?'
+    ).run(String(client_id).trim(), active ? 1 : 0, provider);
+  }
 
   return NextResponse.json({ success: true });
 }

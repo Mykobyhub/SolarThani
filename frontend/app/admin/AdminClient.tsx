@@ -4,9 +4,9 @@ import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings';
+type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings' | 'oauth';
 
-const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings'];
+const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings', 'oauth'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function AdminClient({ data }: { data: Record<string, any> }) {
@@ -84,6 +84,7 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
     { key: 'content',     icon: '🎨', label: 'Content' },
     { key: 'terms',       icon: '📋', label: 'Terms & Policy' },
     { key: 'settings',    icon: '⚙️', label: 'ตั้งค่า' },
+    { key: 'oauth',       icon: '🔗', label: 'Social Login' },
   ];
 
   const filteredInstallers = (data.installers as Record<string, unknown>[]).filter((inst) => {
@@ -487,6 +488,20 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
             {/* ── Settings ── */}
             {activeTab === 'settings' && (
               <SettingsTab contentMap={data.contentMap} />
+            )}
+
+            {/* ── Social Login (OAuth) ── */}
+            {activeTab === 'oauth' && (
+              <OAuthTab
+                providers={data.oauthProviders}
+                onSave={(provider, body) =>
+                  api(`/api/admin/oauth-providers/${provider}`, 'PUT', body)
+                    .then((d: { success: boolean; message?: string }) => {
+                      if (d.success) showAlert('success', 'บันทึกการตั้งค่า Social Login แล้ว');
+                      return d;
+                    })
+                }
+              />
             )}
           </main>
         </div>
@@ -1131,6 +1146,119 @@ function SettingsTab({ contentMap }: { contentMap: Record<string, string> }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ─── Social Login (OAuth providers) Tab ──────────────────────────────────────
+
+interface OAuthProviderRow {
+  provider: string;
+  client_id: string;
+  active: number | boolean;
+  client_secret_set: boolean;
+}
+
+const OAUTH_PROVIDER_META: Record<string, { label: string; icon: string }> = {
+  google:   { label: 'Google',      icon: '🔴' },
+  facebook: { label: 'Facebook',    icon: '🔵' },
+  twitter:  { label: 'Twitter / X', icon: '⚫' },
+  tiktok:   { label: 'TikTok',      icon: '⬛' },
+};
+const OAUTH_PROVIDER_ORDER = ['google', 'facebook', 'twitter', 'tiktok'];
+
+function OAuthTab({ providers, onSave }: {
+  providers: OAuthProviderRow[];
+  onSave: (provider: string, body: object) => Promise<{ success: boolean; message?: string }>;
+}) {
+  const initial = OAUTH_PROVIDER_ORDER.map((p) => {
+    const row = providers.find((r) => r.provider === p);
+    return {
+      provider: p,
+      clientId: row?.client_id || '',
+      clientSecret: '',
+      active: !!row?.active,
+      secretSet: !!row?.client_secret_set,
+    };
+  });
+
+  const [rows, setRows] = useState(initial);
+  const [savingProvider, setSavingProvider] = useState<string | null>(null);
+
+  function update(provider: string, patch: Partial<(typeof initial)[number]>) {
+    setRows((rs) => rs.map((r) => (r.provider === provider ? { ...r, ...patch } : r)));
+  }
+
+  async function handleSave(provider: string) {
+    const row = rows.find((r) => r.provider === provider);
+    if (!row) return;
+    setSavingProvider(provider);
+    const body: Record<string, unknown> = { client_id: row.clientId, active: row.active ? 1 : 0 };
+    const typedSecret = row.clientSecret.trim();
+    if (typedSecret) body.client_secret = typedSecret;
+    const d = await onSave(provider, body);
+    setSavingProvider(null);
+    if (d.success) {
+      update(provider, { clientSecret: '', secretSet: typedSecret ? true : row.secretSet });
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {rows.map((row) => {
+        const meta = OAUTH_PROVIDER_META[row.provider] || { label: row.provider, icon: '🔗' };
+        return (
+          <div key={row.provider} className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-base">{meta.icon} {meta.label}</h2>
+              <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(e) => update(row.provider, { active: e.target.checked })}
+                />
+                เปิดใช้งาน
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+              <div className="form-group mb-0">
+                <label className="form-label">Client ID</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={row.clientId}
+                  onChange={(e) => update(row.provider, { clientId: e.target.value })}
+                  placeholder="Client ID"
+                />
+              </div>
+              <div className="form-group mb-0">
+                <label className="form-label">
+                  Client Secret{' '}
+                  {row.secretSet && <span className="text-xs font-normal text-[var(--color-muted)]">(ตั้งค่าไว้แล้ว)</span>}
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={row.clientSecret}
+                  onChange={(e) => update(row.provider, { clientSecret: e.target.value })}
+                  placeholder={row.secretSet ? '•••••••••••••• (เว้นว่างไว้เพื่อไม่เปลี่ยน)' : 'ยังไม่ได้ตั้งค่า'}
+                  autoComplete="new-password"
+                />
+                <span className="form-hint">เว้นว่างไว้หากไม่ต้องการเปลี่ยนค่าที่บันทึกไว้แล้ว</span>
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => handleSave(row.provider)}
+                disabled={savingProvider === row.provider}
+              >
+                {savingProvider === row.provider ? '⏳ กำลังบันทึก...' : '💾 บันทึก'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

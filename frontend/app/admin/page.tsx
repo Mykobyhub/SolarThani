@@ -61,9 +61,14 @@ async function getAdminData() {
     const siteContent = (await db.prepare('SELECT key, value FROM site_content').all()) as { key: string; value: string }[];
     const contentMap = Object.fromEntries(siteContent.map((r) => [r.key, r.value]));
 
-    return { stats, installers, reviews, leads, blogs, messages, contentMap };
+    // Never load raw client_secret into the page — only whether one is set.
+    const oauthProviders = await db.prepare(
+      "SELECT provider, client_id, active, (client_secret <> '') AS client_secret_set FROM oauth_providers ORDER BY provider"
+    ).all();
+
+    return { stats, installers, reviews, leads, blogs, messages, contentMap, oauthProviders };
   } catch {
-    return { stats: {}, installers: [], reviews: [], leads: [], blogs: [], messages: [], contentMap: {} };
+    return { stats: {}, installers: [], reviews: [], leads: [], blogs: [], messages: [], contentMap: {}, oauthProviders: [] };
   }
 }
 
