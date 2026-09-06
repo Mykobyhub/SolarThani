@@ -9,7 +9,10 @@ export const metadata: Metadata = {
   description: 'ค้นหาและเปรียบเทียบผู้ติดตั้งโซลาร์เซลล์กว่า 150 รายทั่วประเทศ กรองตามจังหวัด คะแนน และประสบการณ์',
 };
 
-export const revalidate = 120;
+// No `revalidate` here (ISR) — this page now reads the `q` and `province` searchParams (to serve
+// the homepage search box / WebSite SearchAction target `/installers?q=...`, and the homepage
+// "จังหวัดยอดนิยม" links `/installers?province=...`), which opts it into per-request dynamic
+// rendering. See https://nextjs.org/docs/app/api-reference/file-conventions/page#searchparams-optional
 
 async function getInstallers(): Promise<Installer[]> {
   try {
@@ -33,7 +36,10 @@ async function getSiteData() {
   } catch { return { headerImage: null, headerPos: 'center', headerSize: 'cover', defaultInstallerImage: null, defaultInstallerCardImage: null }; }
 }
 
-export default async function InstallersPage() {
+interface Props { searchParams: Promise<{ q?: string; province?: string }> }
+
+export default async function InstallersPage({ searchParams }: Props) {
+  const { q, province } = await searchParams;
   const installers = await getInstallers();
   const site = await getSiteData();
 
@@ -60,7 +66,7 @@ export default async function InstallersPage() {
         </div>
       </div>
 
-      <InstallersClient installers={installers} defaultInstallerImage={site.defaultInstallerImage} defaultInstallerCardImage={site.defaultInstallerCardImage} />
+      <InstallersClient installers={installers} defaultInstallerImage={site.defaultInstallerImage} defaultInstallerCardImage={site.defaultInstallerCardImage} initialSearch={q} initialProvince={province} />
     </>
   );
 }

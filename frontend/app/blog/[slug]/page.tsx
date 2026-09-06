@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import type { Blog } from '@/types';
+import { SITE_URL, jsonLdHtml } from '@/lib/jsonld';
 
 interface Props { params: Promise<{ slug: string }> }
 
@@ -63,6 +64,13 @@ async function getDefaultBlogImage(): Promise<string | null> {
   } catch { return null; }
 }
 
+async function getSiteLogo(): Promise<string | null> {
+  try {
+    const row = (await db.prepare("SELECT value FROM site_content WHERE key='logo_url'").get()) as { value: string } | undefined;
+    return row?.value || null;
+  } catch { return null; }
+}
+
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
   const blog = await getBlog(slug);
@@ -70,10 +78,33 @@ export default async function BlogPostPage({ params }: Props) {
 
   const related = await getRelated(blog);
   const defaultBlogImage = await getDefaultBlogImage();
+  const siteLogo = await getSiteLogo();
   const tags: string[] = blog.tags ? (() => { try { return JSON.parse(blog.tags!); } catch { return []; } })() : [];
+
+  const blogUrl = `${SITE_URL}/blog/${blog.slug}`;
+  const articleImage = blog.cover_image || defaultBlogImage || undefined;
+  const articleLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    '@id': blogUrl,
+    headline: blog.title,
+    description: blog.meta_description || blog.excerpt || undefined,
+    image: articleImage ? [articleImage] : undefined,
+    datePublished: new Date(blog.published_at).toISOString(),
+    dateModified: new Date(blog.updated_at || blog.published_at).toISOString(),
+    author: { '@type': 'Person', name: blog.author },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Solar Thani',
+      logo: siteLogo ? { '@type': 'ImageObject', url: siteLogo } : undefined,
+    },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': blogUrl },
+  };
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(articleLd) }} />
+
       <div className="page-header">
         <div className="container mx-auto px-4">
           <nav className="breadcrumb text-white/70">

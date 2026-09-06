@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { db } from '@/lib/db';
 import type { Installer, Blog, SiteContent } from '@/types';
+import { SITE_URL, jsonLdHtml } from '@/lib/jsonld';
 
 export const metadata: Metadata = {
   title: 'Solar Thani — ค้นหาผู้ติดตั้งโซลาร์เซลล์',
@@ -42,8 +43,24 @@ export default async function HomePage() {
   const heroSub   = site['hero_sub']      || 'เปรียบเทียบผู้ติดตั้งกว่า 150 ราย พร้อมรีวิวจริงและเครื่องมือคำนวณราคา';
   const heroBg    = site['hero_bg_image'] || null;
 
+  // Bound to the real search box below (`<form action="/installers" method="GET">`, input name="q"),
+  // which InstallersClient reads on mount to filter the installer list.
+  const websiteLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Solar Thani',
+    url: SITE_URL,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: { '@type': 'EntryPoint', urlTemplate: `${SITE_URL}/installers?q={search_term_string}` },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(websiteLd) }} />
+
       {/* ════════════════════════════════════════
           HERO — LearnHub split layout
       ════════════════════════════════════════ */}

@@ -86,9 +86,14 @@ function starsHtml(rating: number) {
   return `<span class="stars-wrap"><span class="stars-base">★★★★★</span><span class="stars-fill" style="width:${pct}%">★★★★★</span></span>`;
 }
 
-export default function InstallersClient({ installers, defaultInstallerImage, defaultInstallerCardImage }: { installers: Installer[]; defaultInstallerImage?: string | null; defaultInstallerCardImage?: string | null }) {
-  const [search,    setSearch]    = useState('');
-  const [province,  setProvince]  = useState('');
+export default function InstallersClient({ installers, defaultInstallerImage, defaultInstallerCardImage, initialSearch, initialProvince }: { installers: Installer[]; defaultInstallerImage?: string | null; defaultInstallerCardImage?: string | null; initialSearch?: string; initialProvince?: string }) {
+  // Pre-filled from the page's `q` searchParam so the homepage search box (and the WebSite/SearchAction
+  // JSON-LD target that points at /installers?q={search_term_string}) actually produces filtered results.
+  const [search,    setSearch]    = useState(initialSearch?.trim() || '');
+  // Pre-filled from the page's `province` searchParam (homepage "จังหวัดยอดนิยม" links, e.g.
+  // /installers?province=เชียงใหม่). Normalized through the same helper used to build the `provinces`
+  // dropdown options, so the seeded value always matches one of those <option> values exactly.
+  const [province,  setProvince]  = useState(() => normalizeProvinceName(initialProvince || '') || '');
   const [minRating, setMinRating] = useState('');
   const [minExp,    setMinExp]    = useState('');
   const [sort,      setSort]      = useState('recommended');

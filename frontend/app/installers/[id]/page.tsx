@@ -4,7 +4,17 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import type { Installer, Review, PortfolioPhoto } from '@/types';
+import { SITE_URL, jsonLdHtml } from '@/lib/jsonld';
 import ReviewSection from './ReviewSection';
+
+// Same 4 Q&A shown in the "คำถามที่พบบ่อย" card below — kept as a single source of truth so the
+// FAQPage JSON-LD always matches what's actually visible on the page (Google requires this).
+const INSTALLER_FAQS = [
+  { q: 'ใช้เวลาติดตั้งนานแค่ไหน?', a: '1–3 วันทำการสำหรับระบบทั่วไป ขึ้นอยู่กับขนาดและความซับซ้อน' },
+  { q: 'ต้องเตรียมอะไรบ้างก่อนติดตั้ง?', a: 'หลังคาแข็งแรงเพียงพอ ทีมงานจะสำรวจฟรีก่อนเสมอ' },
+  { q: 'หลังติดตั้งดูแลยากไหม?', a: 'ง่ายมาก เพียงทำความสะอาดแผงปีละ 1–2 ครั้ง' },
+  { q: 'ค่าไฟจะลดได้มากแค่ไหน?', a: 'เฉลี่ย 60–80% บางรายลดได้มากกว่า 90%' },
+] as const;
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -62,6 +72,18 @@ async function getPortfolio(installerId: number): Promise<PortfolioPhoto[]> {
   } catch { return []; }
 }
 
+// Computed fresh from `reviews` (not the installers.rating/reviews_count columns, which can be a
+// stale/manually-set baseline) so the AggregateRating in JSON-LD always reflects real, verifiable
+// approved reviews — never a number Google could flag as fake structured data.
+async function getReviewStats(installerId: number): Promise<{ count: number; average: number }> {
+  try {
+    const row = (await db
+      .prepare("SELECT COUNT(*)::int AS cnt, AVG(rating)::float8 AS avg FROM reviews WHERE installer_id=? AND status='active'")
+      .get(installerId)) as { cnt: number; avg: number | null } | undefined;
+    return { count: row?.cnt ?? 0, average: row?.avg ?? 0 };
+  } catch { return { count: 0, average: 0 }; }
+}
+
 async function getDefaultImages(): Promise<{ logoDefault: string | null; bannerDefault: string | null }> {
   try {
     const rows = (await db.prepare("SELECT key, value FROM site_content WHERE key IN ('default_installer_image','default_installer_banner_image')").all()) as { key: string; value: string }[];
@@ -102,14 +124,66 @@ export default async function InstallerDetailPage({ params }: Props) {
 
   const reviews = await getReviews(inst.id);
   const portfolio = await getPortfolio(inst.id);
+  const reviewStats = await getReviewStats(inst.id);
 
   const { logoDefault, bannerDefault } = await getDefaultImages();
   const services      = parseListField(inst.services);
   const certifications = parseListField(inst.certifications);
   const projects      = safeJson<{ name: string; savings: string }[]>(inst.projects, []);
+  const areaServed    = parseListField(inst.service_provinces);
+
+  const pageUrl = `${SITE_URL}/installers/${inst.id}`;
+
+  const localBusinessLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': pageUrl,
+    name: inst.name,
+    url: pageUrl,
+    image: inst.logo_url || inst.banner_image || logoDefault || undefined,
+    description: inst.about || undefined,
+    telephone: inst.phone || undefined,
+    address: inst.location
+      ? { '@type': 'PostalAddress', addressLocality: inst.location, addressCountry: 'TH' }
+      : undefined,
+    areaServed: areaServed.length > 0 ? areaServed : undefined,
+  };
+  if (reviewStats.count > 0) {
+    localBusinessLd.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: Number(reviewStats.average.toFixed(2)),
+      reviewCount: reviewStats.count,
+      bestRating: 5,
+      worstRating: 1,
+    };
+  }
+  if (reviews.length > 0) {
+    // reviewer_email is deliberately omitted — it's private contact info, not part of the public review.
+    localBusinessLd.review = reviews.map((r) => ({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: r.reviewer_name },
+      datePublished: r.created_at,
+      name: r.title || undefined,
+      reviewBody: r.body,
+      reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5, worstRating: 1 },
+    }));
+  }
+
+  const faqLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: INSTALLER_FAQS.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  };
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(localBusinessLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqLd) }} />
+
       {/* Hero Banner */}
       <div
         className="text-white py-8"
@@ -320,12 +394,7 @@ export default async function InstallerDetailPage({ params }: Props) {
             <div className="card p-6">
               <h2 className="text-lg font-bold mb-4">❓ คำถามที่พบบ่อย</h2>
               <div className="space-y-3">
-                {[
-                  { q: 'ใช้เวลาติดตั้งนานแค่ไหน?', a: '1–3 วันทำการสำหรับระบบทั่วไป ขึ้นอยู่กับขนาดและความซับซ้อน' },
-                  { q: 'ต้องเตรียมอะไรบ้างก่อนติดตั้ง?', a: 'หลังคาแข็งแรงเพียงพอ ทีมงานจะสำรวจฟรีก่อนเสมอ' },
-                  { q: 'หลังติดตั้งดูแลยากไหม?', a: 'ง่ายมาก เพียงทำความสะอาดแผงปีละ 1–2 ครั้ง' },
-                  { q: 'ค่าไฟจะลดได้มากแค่ไหน?', a: 'เฉลี่ย 60–80% บางรายลดได้มากกว่า 90%' },
-                ].map((faq) => (
+                {INSTALLER_FAQS.map((faq) => (
                   <details key={faq.q} className="border border-[var(--color-border)] rounded-xl">
                     <summary className="px-4 py-3 font-medium text-sm cursor-pointer hover:bg-blue-50/50 rounded-xl">
                       {faq.q}
