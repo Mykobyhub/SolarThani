@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
+import type { Installer } from '@/types';
+import { THAI_PROVINCES, getInstallerProvinces } from '@/lib/provinces';
 
 export const revalidate = 3600;
 
@@ -16,6 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let installers: MetadataRoute.Sitemap = [];
   let blogs: MetadataRoute.Sitemap = [];
+  let provinces: MetadataRoute.Sitemap = [];
 
   try {
     const rows = (await db
@@ -41,5 +44,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
   } catch {}
 
-  return [...staticRoutes, ...installers, ...blogs];
+  // Province SEO landing pages (`/installers/province/[province]`) — only provinces with >=1 active
+  // installer are included, matching that route's generateStaticParams: a province with 0 installers
+  // still renders (soft empty-state, no 404) but shouldn't be indexed as if it had content.
+  try {
+    const rows = (await db
+      .prepare("SELECT service_provinces, location FROM installers WHERE status='active'")
+      .all()) as Pick<Installer, 'service_provinces' | 'location'>[];
+    const present = new Set<string>();
+    rows.forEach((r) => getInstallerProvinces(r).forEach((p) => present.add(p)));
+    provinces = THAI_PROVINCES.filter((p) => present.has(p)).map((p) => ({
+      url: `${base}/installers/province/${encodeURIComponent(p)}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.75,
+    }));
+  } catch {}
+
+  return [...staticRoutes, ...installers, ...provinces, ...blogs];
 }
