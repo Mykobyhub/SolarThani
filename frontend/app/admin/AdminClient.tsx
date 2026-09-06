@@ -3,10 +3,12 @@
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import MilestonePaymentTab from './MilestonePaymentTab';
+import LineSettingsTab from './LineSettingsTab';
 
-type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings' | 'oauth';
+type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings' | 'oauth' | 'milestones' | 'line';
 
-const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings', 'oauth'];
+const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings', 'oauth', 'milestones', 'line'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function AdminClient({ data }: { data: Record<string, any> }) {
@@ -85,6 +87,8 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
     { key: 'terms',       icon: '📋', label: 'Terms & Policy' },
     { key: 'settings',    icon: '⚙️', label: 'ตั้งค่า' },
     { key: 'oauth',       icon: '🔗', label: 'Social Login' },
+    { key: 'milestones',  icon: '💳', label: 'ผ่อนชำระ', badge: data.stats.openDisputes },
+    { key: 'line',        icon: '📱', label: 'LINE OA' },
   ];
 
   const filteredInstallers = (data.installers as Record<string, unknown>[]).filter((inst) => {
@@ -502,6 +506,16 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
                     })
                 }
               />
+            )}
+
+            {/* ── Milestone Payment ── */}
+            {activeTab === 'milestones' && (
+              <MilestonePaymentTab initialOpenDisputes={data.stats.openDisputes} showAlert={showAlert} />
+            )}
+
+            {/* ── LINE OA Settings ── */}
+            {activeTab === 'line' && (
+              <LineSettingsTab showAlert={showAlert} />
             )}
           </main>
         </div>

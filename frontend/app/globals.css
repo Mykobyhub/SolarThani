@@ -715,3 +715,102 @@ a { color: inherit; text-decoration: none; }
   background: var(--color-primary-light);
   border-color: var(--color-primary);
 }
+
+/* ══════════════════════════════════════════════════════
+   MILESTONE PAYMENT — badges, toggle, timeline, progress track
+   (design spec: milestone-payment-design-spec.md, round 1)
+══════════════════════════════════════════════════════ */
+.badge-hold   { background: rgba(99,102,241,.1); color: #4338ca; }
+.badge-danger { background: rgba(239,68,68,.1);  color: #b91c1c; }
+
+.btn-danger-outline { background: transparent; color: #dc2626; border-color: #fecaca; }
+.btn-danger-outline:hover { background: #fef2f2; border-color: #ef4444; }
+
+.toggle-switch { position: relative; display: inline-block; width: 46px; height: 26px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--color-border-dark); border-radius: var(--radius-full); cursor: pointer; transition: background .2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.toggle-switch input:checked + .toggle-slider { background: #059669; }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+.milestone-timeline { display: flex; flex-direction: column; }
+.milestone-item { display: flex; gap: 1rem; position: relative; }
+.milestone-rail { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 36px; }
+.milestone-marker { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 800; border: 2px solid var(--color-border); background: #fff; color: var(--color-muted); z-index: 1; }
+.milestone-marker.is-done   { background: #059669; border-color: #059669; color: #fff; }
+.milestone-marker.is-active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.milestone-marker.is-warn   { background: #fff; border-color: #f59e0b; color: #d97706; }
+.milestone-marker.is-danger { background: #fff; border-color: #ef4444; color: #dc2626; }
+.milestone-connector { flex: 1; width: 2px; background: var(--color-border); min-height: 20px; margin: 2px 0; }
+.milestone-connector.is-filled { background: #059669; }
+.milestone-body { flex: 1; padding-bottom: 1.5rem; min-width: 0; }
+.milestone-item:last-child .milestone-body { padding-bottom: 0; }
+.milestone-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+.milestone-title { font-weight: 700; font-size: .95rem; }
+.milestone-desc { font-size: .85rem; color: var(--color-muted); margin-bottom: .6rem; }
+.milestone-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.progress-track { display: flex; gap: 3px; height: 7px; border-radius: var(--radius-full); overflow: hidden; background: var(--color-border); }
+.progress-seg { flex: 1; background: var(--color-border); }
+.progress-seg.done   { background: #059669; }
+.progress-seg.active { background: var(--color-primary); }
+.progress-seg.danger { background: #ef4444; }
+
+.builder-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: .5rem; align-items: center; }
+@media (max-width: 480px) {
+  .builder-row { grid-template-columns: auto 1fr; }
+}
+
+/* ══════════════════════════════════════════════════════
+   MILESTONE PAYMENT round 2 — LINE linking, channel picker, receipts
+   (design spec addendum v2)
+══════════════════════════════════════════════════════ */
+.receipt-row { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px dashed var(--color-border); font-size: .9rem; }
+.receipt-row:last-child { border-bottom: none; }
+.receipt-row .label { color: var(--color-muted); flex-shrink: 0; }
+.receipt-row .value { font-weight: 600; text-align: right; }
+
+.channel-picker { display: flex; gap: .5rem; flex-wrap: wrap; }
+.channel-option {
+  position: relative;
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .5rem .9rem; border-radius: var(--radius-full);
+  border: 1px solid var(--color-border); background: #fff;
+  font-size: .82rem; font-weight: 600; color: var(--color-text);
+  cursor: pointer; transition: all .15s ease;
+}
+.channel-option:hover:not(:disabled) { border-color: var(--color-primary); }
+.channel-option.is-selected { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.channel-option:disabled { opacity: .45; cursor: not-allowed; }
+.tag-recommend {
+  position: absolute; top: -8px; right: -6px;
+  background: #f59e0b; color: #fff; font-size: .6rem; font-weight: 700;
+  padding: .1rem .4rem; border-radius: var(--radius-full); line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+
+.line-oa-pill {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .35rem .8rem; border-radius: var(--radius-full);
+  background: rgba(6,199,85,.1); color: #06c755; font-weight: 700; font-size: .82rem;
+}
+
+.qr-box {
+  width: 140px; height: 140px; border-radius: var(--radius-lg);
+  border: 2px dashed var(--color-border); background: var(--color-bg-alt);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem; color: var(--color-muted); margin: 0 auto;
+}
+
+.verify-code-chip {
+  display: inline-flex; align-items: center; gap: .6rem;
+  padding: .7rem 1.1rem; border-radius: var(--radius-lg);
+  background: var(--color-bg-alt); border: 1px solid var(--color-border);
+  font-family: monospace; font-size: 1.1rem; font-weight: 800; letter-spacing: .05em;
+}
+
+/* Print stylesheet — used by the customer receipt page's "🖨 พิมพ์" button; hides site chrome
+   so only the receipt card itself prints. */
+@media print {
+  .navbar, .footer, .page-header { display: none !important; }
+}

@@ -22,7 +22,8 @@ async function getAdminData() {
         (SELECT COUNT(*) FROM reviews WHERE status='pending')    AS "pendingReviews",
         (SELECT COUNT(*) FROM reviews WHERE status='active')     AS "activeReviews",
         (SELECT COUNT(*) FROM blogs WHERE status='active')       AS "publishedBlogs",
-        (SELECT COUNT(*) FROM contact_messages WHERE status='new') AS "newMessages"
+        (SELECT COUNT(*) FROM contact_messages WHERE status='new') AS "newMessages",
+        (SELECT COUNT(*) FROM payment_disputes WHERE status='open') AS "openDisputes"
     `).get()) as Record<string, number>;
     const stats = {
       activeInstallers: Number(statsRow.activeInstallers),
@@ -33,6 +34,7 @@ async function getAdminData() {
       activeReviews: Number(statsRow.activeReviews),
       publishedBlogs: Number(statsRow.publishedBlogs),
       newMessages: Number(statsRow.newMessages),
+      openDisputes: Number(statsRow.openDisputes),
     };
 
     const installers = await db.prepare(`

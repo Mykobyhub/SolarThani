@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Installer, Lead } from '@/types';
+import PaymentProjectsTab from './PaymentProjectsTab';
 
 const THAI_PROVINCES = [
   'กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','ขอนแก่น',
@@ -49,7 +50,7 @@ export default function DashboardClient({
   siteLogo: string | null;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'profile' | 'portfolio' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'profile' | 'portfolio' | 'payments' | 'settings'>('overview');
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [profileForm, setProfileForm] = useState({
@@ -257,7 +258,7 @@ export default function DashboardClient({
     );
   }
 
-  const TABS: { key: 'overview' | 'leads' | 'profile' | 'portfolio' | 'settings'; icon: React.ReactNode; label: string }[] = [
+  const TABS: { key: 'overview' | 'leads' | 'profile' | 'portfolio' | 'payments' | 'settings'; icon: React.ReactNode; label: string }[] = [
     {
       key: 'overview', label: 'ภาพรวม',
       icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>,
@@ -273,6 +274,10 @@ export default function DashboardClient({
     {
       key: 'portfolio', label: 'ผลงาน',
       icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>,
+    },
+    {
+      key: 'payments', label: 'โครงการ',
+      icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z" /></svg>,
     },
     {
       key: 'settings', label: 'ตั้งค่า',
@@ -721,6 +726,9 @@ export default function DashboardClient({
                 </p>
               </div>
             )}
+
+            {/* ── Payment Projects (Milestone Payment) ── */}
+            {activeTab === 'payments' && <PaymentProjectsTab />}
 
             {/* ── Settings ── */}
             {activeTab === 'settings' && (

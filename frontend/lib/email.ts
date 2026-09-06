@@ -226,6 +226,69 @@ export async function buildClaimAccountEmail(name: string, email: string, tempPa
   );
 }
 
+// ── Milestone Payment (installment / escrow) notifications — round 2 ──
+
+export async function buildMilestonePlanProposedEmail(customerName: string, projectTitle: string, totalAmount: number, link: string): Promise<string> {
+  return emailLayout(
+    'มีแผนการชำระเงินงวดใหม่รอคุณยืนยัน',
+    `<h2 style="color:#00b8a0;">สวัสดีคุณ ${customerName}</h2>
+     <p>ผู้ติดตั้งของคุณได้เสนอแผนการชำระเงินสำหรับโครงการ <strong>${projectTitle}</strong> มูลค่ารวม <strong>฿${Math.round(totalAmount).toLocaleString('th-TH')}</strong></p>
+     <p>กรุณาตรวจสอบรายละเอียดงวดงานและยืนยันแผนเพื่อเริ่มดำเนินการ</p>
+     <a href="${link}" style="display:inline-block;background:#00b8a0;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">ดูรายละเอียดโครงการ →</a>`
+  );
+}
+
+export async function buildMilestonePaymentReceivedEmail(installerName: string, projectTitle: string, seq: number, amount: number): Promise<string> {
+  return emailLayout(
+    `ลูกค้าชำระงวดที่ ${seq} แล้ว`,
+    `<h2 style="color:#00b8a0;">สวัสดีคุณ ${installerName}</h2>
+     <p>ลูกค้าได้ชำระเงินงวดที่ ${seq} ของโครงการ <strong>${projectTitle}</strong> จำนวน <strong>฿${Math.round(amount).toLocaleString('th-TH')}</strong> เรียบร้อยแล้ว</p>
+     <p>เงินถูกพักไว้ในระบบ (escrow) คุณสามารถเริ่มดำเนินงานงวดนี้ได้ทันที</p>
+     <p><a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?tab=payments" style="display:inline-block;padding:10px 20px;background:#00b8a0;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">ดูใน Dashboard →</a></p>`
+  );
+}
+
+export async function buildMilestoneDoneEmail(customerName: string, projectTitle: string, seq: number, link: string): Promise<string> {
+  return emailLayout(
+    `งวดที่ ${seq} เสร็จแล้ว รอการยืนยันจากคุณ`,
+    `<h2 style="color:#00b8a0;">สวัสดีคุณ ${customerName}</h2>
+     <p>ผู้ติดตั้งได้แจ้งว่างวดที่ ${seq} ของโครงการ <strong>${projectTitle}</strong> เสร็จสมบูรณ์แล้ว</p>
+     <p>กรุณาตรวจสอบงานและยืนยันเพื่อปล่อยเงินให้ผู้ติดตั้ง หรือแจ้งโต้แย้งหากงานยังไม่เสร็จจริง</p>
+     <a href="${link}" style="display:inline-block;background:#00b8a0;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">ตรวจสอบและยืนยัน →</a>`
+  );
+}
+
+export async function buildMilestoneDecisionEmail(installerName: string, projectTitle: string, seq: number, decision: 'released' | 'disputed'): Promise<string> {
+  const isReleased = decision === 'released';
+  return emailLayout(
+    isReleased ? `ลูกค้ายืนยันงวดที่ ${seq} — ปล่อยเงินแล้ว` : `ลูกค้าโต้แย้งงวดที่ ${seq}`,
+    `<h2 style="color:${isReleased ? '#00b8a0' : '#dc2626'};">สวัสดีคุณ ${installerName}</h2>
+     <p>${isReleased
+        ? `ลูกค้ายืนยันว่างานงวดที่ ${seq} ของโครงการ <strong>${projectTitle}</strong> เสร็จสมบูรณ์แล้ว ระบบได้ปล่อยเงินให้คุณเรียบร้อย`
+        : `ลูกค้าได้ยื่นข้อโต้แย้งสำหรับงวดที่ ${seq} ของโครงการ <strong>${projectTitle}</strong> เงินถูกพักไว้จนกว่า Admin จะตัดสิน`}</p>
+     <p><a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/dashboard?tab=payments" style="display:inline-block;padding:10px 20px;background:#00b8a0;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">ดูใน Dashboard →</a></p>`
+  );
+}
+
+export async function buildDisputeResolvedEmail(recipientName: string, projectTitle: string, seq: number, action: 'release' | 'refund'): Promise<string> {
+  return emailLayout(
+    `ผลการตัดสินข้อโต้แย้ง งวดที่ ${seq}`,
+    `<h2 style="color:#00b8a0;">สวัสดีคุณ ${recipientName}</h2>
+     <p>Admin ได้ตัดสินข้อโต้แย้งสำหรับงวดที่ ${seq} ของโครงการ <strong>${projectTitle}</strong> แล้ว</p>
+     <p>ผลการตัดสิน: <strong>${action === 'release' ? 'ปล่อยเงินให้ผู้ติดตั้ง' : 'คืนเงินให้ลูกค้า'}</strong></p>
+     <p style="color:#6b7c7a;font-size:13px;">การตัดสินนี้เป็นที่สิ้นสุด</p>`
+  );
+}
+
+export async function buildProjectCancelledEmail(recipientName: string, projectTitle: string, requestedBy: string): Promise<string> {
+  return emailLayout(
+    `โครงการ ${projectTitle} ถูกยกเลิก`,
+    `<h2 style="color:#dc2626;">สวัสดีคุณ ${recipientName}</h2>
+     <p>โครงการ <strong>${projectTitle}</strong> ถูกยกเลิกแล้ว (คำขอโดย${requestedBy})</p>
+     <p>งวดที่ยังไม่ชำระถูกยกเลิก งวดที่ชำระแล้วแต่ยังไม่เริ่มงานถูกคืนเงินโดยอัตโนมัติ ส่วนงวดที่กำลังดำเนินงานอยู่จะถูกส่งให้ Admin พิจารณาตัดสิน</p>`
+  );
+}
+
 export async function buildContactSupportEmail(msg: { name: string; email: string; phone?: string | null; subject?: string | null; message: string }): Promise<string> {
   const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
   return emailLayout(
