@@ -26,6 +26,17 @@ export async function saveFile(
   return `/uploads/${subdir}/${filename}`;
 }
 
+/** Same as saveFile() but for raw bytes (e.g. an image downloaded from the LINE Content API,
+ * which arrives as a Buffer, not a browser-side File). */
+export function saveBuffer(buffer: Buffer, subdir: string, basename: string, ext: string): string {
+  const cleanExt = ext.startsWith('.') ? ext : `.${ext}`;
+  const filename = `${basename}${cleanExt}`;
+  const dir = path.join(UPLOADS_ROOT, subdir);
+  ensureDir(dir);
+  fs.writeFileSync(path.join(dir, filename), buffer);
+  return `/uploads/${subdir}/${filename}`;
+}
+
 export function deleteFile(urlPath: string): void {
   try {
     const rel = urlPath.replace(/^\/uploads\//, '');

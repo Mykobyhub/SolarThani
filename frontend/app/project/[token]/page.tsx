@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import ChannelPicker from '@/components/payment/ChannelPicker';
+import { JOB_CATEGORIES, CATEGORY_ICON, type JobCategory } from '@/lib/subcontractor/constants';
 
 interface Milestone {
   id: number;
@@ -39,6 +40,7 @@ interface HubData {
   receipts: Receipt[];
   pendingAction: { type: 'accept' | 'pay' | 'confirm'; milestoneId?: number } | null;
   line: { enabled: boolean; oaBasicId: string };
+  jobStageRollup: { category: JobCategory; stage: 'done' | 'active' | 'pending' }[];
 }
 
 const PROJECT_STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
@@ -182,6 +184,35 @@ export default function ProjectHubPage() {
               >
                 ดำเนินการ →
               </Link>
+            </div>
+          )}
+
+          {data.jobStageRollup && (
+            <div className="card p-5 mb-4">
+              <div className="font-bold mb-2">👷 ความคืบหน้างานหน้างาน</div>
+              {data.jobStageRollup.some((j) => j.stage === 'active') && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {data.jobStageRollup.filter((j) => j.stage === 'active').map((j) => (
+                    <span key={j.category} className="badge badge-primary">{CATEGORY_ICON[j.category]} กำลัง{j.category}</span>
+                  ))}
+                </div>
+              )}
+              <div className="job-stage-track">
+                {JOB_CATEGORIES.map((cat, idx) => {
+                  const entry = data.jobStageRollup.find((j) => j.category === cat);
+                  const stage = entry?.stage || 'pending';
+                  return (
+                    <div key={cat} className={`job-stage-step ${stage === 'done' ? 'is-done' : stage === 'active' ? 'is-active' : ''}`}>
+                      {idx < JOB_CATEGORIES.length - 1 && <div className="job-stage-connector" />}
+                      <div className="job-stage-dot">{stage === 'done' ? '✓' : CATEGORY_ICON[cat]}</div>
+                      <div className="job-stage-label">{cat}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-[var(--color-muted)] mt-3">
+                🔒 ชื่อทีมช่างหน้างานเป็นข้อมูลภายในของผู้ติดตั้ง — คุณจะเห็นเฉพาะขั้นตอนงานโดยรวมที่นี่
+              </p>
             </div>
           )}
 

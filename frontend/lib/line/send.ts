@@ -68,6 +68,26 @@ export async function replyLineMessage(replyToken: string, text: string): Promis
   }
 }
 
+/** Downloads a message's binary content (photo sent by a sub-contractor) via the LINE Content
+ * API. Returns null on any failure — callers should treat a missing photo as a no-op, same
+ * silent-skip contract as the rest of this file. */
+export async function fetchLineContent(messageId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  try {
+    const cfg = await getLineConfig();
+    if (!cfg.accessToken) return null;
+    const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: { Authorization: `Bearer ${cfg.accessToken}` },
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { buffer, contentType };
+  } catch (err) {
+    console.error('[line] fetchLineContent error', err);
+    return null;
+  }
+}
+
 /** Verifies the X-Line-Signature header (HMAC-SHA256, base64) against the raw request body. */
 export function verifyLineSignature(rawBody: string, signatureHeader: string | null, channelSecret: string): boolean {
   if (!signatureHeader || !channelSecret) return false;

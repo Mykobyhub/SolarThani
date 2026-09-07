@@ -6,9 +6,10 @@ const CODE_TTL_MINUTES = 10;
 export interface LinkCodeRow {
   id: number;
   code: string;
-  party: 'customer' | 'installer';
+  party: 'customer' | 'installer' | 'subcontractor';
   project_id: number | null;
   installer_id: number | null;
+  subcontractor_id: number | null;
   expires_at: string;
   used_at: string | null;
   created_at: string;
@@ -20,18 +21,26 @@ function generateCode(): string {
   return String(n).padStart(6, '0');
 }
 
-/** Issues a fresh link code for a customer (scoped to one payment_project) or an installer (scoped to their account). */
-export async function createLinkCode(opts: { party: 'customer'; projectId: number } | { party: 'installer'; installerId: number }): Promise<{ code: string; expiresAt: string }> {
+/** Issues a fresh link code for a customer (scoped to one payment_project), an installer (scoped
+ * to their account), or a sub-contractor (scoped to one subcontractors row — the installer relays
+ * this code out-of-band since the sub-contractor never opens any SolarPanel UI). */
+export async function createLinkCode(
+  opts: { party: 'customer'; projectId: number } | { party: 'installer'; installerId: number } | { party: 'subcontractor'; subcontractorId: number }
+): Promise<{ code: string; expiresAt: string }> {
   const code = generateCode();
   const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000);
   if (opts.party === 'customer') {
     await db
       .prepare('INSERT INTO line_link_codes (code, party, project_id, expires_at) VALUES (?, ?, ?, ?)')
       .run(code, 'customer', opts.projectId, expiresAt.toISOString());
-  } else {
+  } else if (opts.party === 'installer') {
     await db
       .prepare('INSERT INTO line_link_codes (code, party, installer_id, expires_at) VALUES (?, ?, ?, ?)')
       .run(code, 'installer', opts.installerId, expiresAt.toISOString());
+  } else {
+    await db
+      .prepare('INSERT INTO line_link_codes (code, party, subcontractor_id, expires_at) VALUES (?, ?, ?, ?)')
+      .run(code, 'subcontractor', opts.subcontractorId, expiresAt.toISOString());
   }
   return { code, expiresAt: expiresAt.toISOString() };
 }
@@ -60,6 +69,8 @@ export async function consumeLinkCode(rawCode: string, lineUserId: string): Prom
     await db.prepare('UPDATE payment_projects SET customer_line_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(lineUserId, row.project_id);
   } else if (row.party === 'installer' && row.installer_id) {
     await db.prepare('UPDATE installers SET line_user_id = ? WHERE id = ?').run(lineUserId, row.installer_id);
+  } else if (row.party === 'subcontractor' && row.subcontractor_id) {
+    await db.prepare('UPDATE subcontractors SET line_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(lineUserId, row.subcontractor_id);
   }
 
   return row;

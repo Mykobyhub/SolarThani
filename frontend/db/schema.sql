@@ -266,3 +266,82 @@ CREATE TABLE line_link_codes (
 );
 
 CREATE INDEX idx_line_link_codes_code ON line_link_codes(code);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Sub-contractor Job Assignment — installers hire LINE-only sub-contractors
+-- and split each milestone's work into 4 fixed job categories. Sub-contractors
+-- never log into the dashboard; they report status/photos via LINE, reusing
+-- the line_link_codes mechanism above with a new party='subcontractor' value
+-- instead of a new auth system. They are paid off-platform — nothing here
+-- touches payment_transactions/escrow; approve/reject is purely advisory
+-- against the installer's own "mark milestone done" flow. Sub-contractor
+-- identity (name/phone) is never exposed to any customer-facing API/page.
+-- See scripts/migrate-subcontractor-job-assignment.mjs for the idempotent
+-- migration applied against the already-live Neon DB.
+-- ─────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE subcontractors (
+    id              SERIAL PRIMARY KEY,
+    installer_id    INTEGER NOT NULL REFERENCES installers(id),
+    name            TEXT NOT NULL,
+    phone           TEXT,
+    -- Freeform + fixed-category tags, cosmetic/non-restrictive (design decisions #3/#10) —
+    -- never used to gate what this sub-contractor can be assigned to. Stored as a JSON
+    -- array string, same convention as installers.service_provinces/services/certifications.
+    specialty_tags  TEXT NOT NULL DEFAULT '[]',
+    line_user_id    TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE job_assignments (
+    id                        SERIAL PRIMARY KEY,
+    milestone_id              INTEGER NOT NULL REFERENCES payment_milestones(id),
+    category                  TEXT NOT NULL CHECK (category IN ('สำรวจ','ติดตั้งแผง','เดินสายไฟ','ล้างแผง')),
+    subcontractor_id          INTEGER NOT NULL REFERENCES subcontractors(id),
+    -- State machine: assigned -> in_progress -> submitted -> approved/rejected, with
+    -- 'rejected' folded back into 'in_progress' immediately (per confirmed spec) — the reject
+    -- endpoint writes status='in_progress' directly (rejected_reason/rejected_at record why),
+    -- so 'rejected' is kept in this CHECK as a documented state but is never actually persisted.
+    status                    TEXT NOT NULL DEFAULT 'assigned'
+                              CHECK (status IN ('assigned','in_progress','submitted','approved','rejected')),
+    submitted_note            TEXT,
+    submitted_at              TIMESTAMP,
+    rejected_reason           TEXT,
+    rejected_at               TIMESTAMP,
+    approved_at               TIMESTAMP,
+    -- Reassignment (design decision #9) mutates this row in place — subcontractor_id changes,
+    -- status resets to 'assigned' — rather than creating a new row, so job_assignment_updates
+    -- history stays attached to one stable job_assignments.id. These two columns capture the
+    -- most recent reassignment (if any), enough to render the "reassigned from X to Y" note;
+    -- job_assignment_updates rows already logged keep their own subcontractor_id untouched.
+    previous_subcontractor_id INTEGER REFERENCES subcontractors(id),
+    reassigned_at             TIMESTAMP,
+    created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (milestone_id, category)
+);
+
+CREATE TABLE job_assignment_updates (
+    id                 SERIAL PRIMARY KEY,
+    job_assignment_id  INTEGER NOT NULL REFERENCES job_assignments(id),
+    -- Attributed to whichever sub-contractor was current when this was logged — stays correct
+    -- across a reassignment without ever rewriting a past entry (design decision #9).
+    subcontractor_id   INTEGER NOT NULL REFERENCES subcontractors(id),
+    kind               TEXT NOT NULL DEFAULT 'text' CHECK (kind IN ('text','photo','system')),
+    body               TEXT NOT NULL,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sub-contractors link via the same "add friend, type code in chat" flow as customers/installers.
+-- Widen the CHECK to a third party and add the FK it needs (existing customer/installer rows
+-- are unaffected).
+ALTER TABLE line_link_codes DROP CONSTRAINT line_link_codes_party_check;
+ALTER TABLE line_link_codes ADD CONSTRAINT line_link_codes_party_check
+  CHECK (party IN ('customer','installer','subcontractor'));
+ALTER TABLE line_link_codes ADD COLUMN subcontractor_id INTEGER REFERENCES subcontractors(id);
+
+CREATE INDEX idx_subcontractors_installer          ON subcontractors(installer_id);
+CREATE INDEX idx_job_assignments_milestone         ON job_assignments(milestone_id);
+CREATE INDEX idx_job_assignments_subcontractor     ON job_assignments(subcontractor_id);
+CREATE INDEX idx_job_assignment_updates_job        ON job_assignment_updates(job_assignment_id);

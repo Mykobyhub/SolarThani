@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import ChannelPicker from '@/components/payment/ChannelPicker';
 import LineConnect from '@/components/payment/LineConnect';
+import JobsPanel, { type JobRow } from '@/components/subcontractor/JobsPanel';
+import type { RosterItem } from '@/components/subcontractor/AssignPicker';
 
 interface Lead {
   id: number;
@@ -24,6 +26,7 @@ interface Milestone {
   released_at: string | null;
   release_reference: string | null;
   release_transferred_at: string | null;
+  jobs: JobRow[];
 }
 
 interface Project {
@@ -110,6 +113,7 @@ export default function PaymentProjectsTab() {
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [line, setLine] = useState({ enabled: false, oaBasicId: '', linked: false });
   const [savingChannel, setSavingChannel] = useState(false);
+  const [roster, setRoster] = useState<RosterItem[]>([]);
 
   // Create form state
   const [leadId, setLeadId] = useState<number | ''>('');
@@ -132,6 +136,14 @@ export default function PaymentProjectsTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadRoster = useCallback(async () => {
+    const res = await fetch('/api/installer/subcontractors');
+    const d = await res.json();
+    if (d.success) setRoster(d.subcontractors);
+  }, []);
+
+  useEffect(() => { if (view === 'detail') loadRoster(); }, [view, loadRoster]);
 
   async function generateLineCode() {
     const res = await fetch('/api/installer/line-link-code', { method: 'POST' });
@@ -374,6 +386,7 @@ export default function PaymentProjectsTab() {
                       )}
                       {m.status === 'refunded' && <span className="text-xs text-[var(--color-muted)]">คืนเงินให้ลูกค้าแล้ว</span>}
                     </div>
+                    <JobsPanel projectId={selectedProject.id} milestoneId={m.id} jobs={m.jobs || []} roster={roster} onChanged={load} />
                   </div>
                 </div>
               ))}

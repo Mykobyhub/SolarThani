@@ -1,8 +1,9 @@
 # Solar Panel — Requirements & Project Documentation
 
-> อัปเดตล่าสุด: 2026-08-11  
-> สถานะ: **Migration to Next.js 16 ✅ Complete (N1–N9)** | Phase 18 เป็น Phase สุดท้ายของ Vanilla | **Phase 19 (Next.js) ✅ — Admin: ส่งมอบบัญชี + แก้ไขผู้ติดตั้ง + Favicon**  
-> เวอร์ชัน: Phase 1–18 (Vanilla) → **Next.js Migration N1–N9 ✅** → **Phase 19 (Next.js) ✅** — Next.js 16 + TypeScript + Tailwind CSS 4 + httpOnly Cookie Auth
+> อัปเดตล่าสุด: 2026-09-01  
+> สถานะ: **Migration to Next.js 16 ✅ Complete (N1–N9)** | Phase 18 เป็น Phase สุดท้ายของ Vanilla | **Phase 19 (Next.js) ✅ — Admin: ส่งมอบบัญชี + แก้ไขผู้ติดตั้ง + Favicon** | **Phase 20 ✅ — Production Go-Live (solarthani.com)**  
+> เวอร์ชัน: Phase 1–18 (Vanilla) → **Next.js Migration N1–N9 ✅** → **Phase 19 (Next.js) ✅** → **Phase 20 — Go-Live ✅** — Next.js 16 + TypeScript + Tailwind CSS 4 + httpOnly Cookie Auth  
+> **🌐 Production: https://solarthani.com — LIVE**
 
 ---
 
@@ -38,7 +39,18 @@ npm run dev
 
 > **หมายเหตุ:** `.env.local` อยู่ที่ `frontend/.env.local` — มี JWT_SECRET, SMTP_USER, SMTP_PASS, NEXT_PUBLIC_APP_URL
 
-### URL ทั้งหมด
+## Production (Live) — ดูรายละเอียดเต็มที่ Phase 20
+
+| | |
+|---|---|
+| URL | **https://solarthani.com** |
+| Server | Hostinger VPS (Debian 13), IP `187.52.124.122` |
+| Process manager | PM2 (`deploy/ecosystem.config.js`) — auto-restart + auto-start ตอน reboot |
+| Reverse proxy | nginx (`deploy/nginx/solarthani.com.conf`) |
+| SSL | Let's Encrypt ผ่าน certbot — auto-renew (หมดอายุ 2026-11-29) |
+| Deploy โค้ดใหม่ | `git pull && npm ci && npm run build && pm2 reload solarthani` (ดู `deploy/README.md`) |
+
+### URL ทั้งหมด (Dev)
 
 | หน้า | URL |
 |------|-----|
@@ -3670,3 +3682,101 @@ Body: { "email": "owner@example.com" }
 | `app/installers/[id]/page.tsx` | เพิ่ม `parseListField()` แก้บั๊ก services/certifications ไม่แสดงผลสำหรับข้อมูล plain-text |
 | `app/layout.tsx` | `generateMetadata()` อ่าน `logo_url` ตั้ง favicon แบบ dynamic |
 | `app/favicon.ico` → `public/favicon.ico` | ย้ายไฟล์ กันชนกับ favicon แบบ dynamic |
+
+---
+
+## Phase 20 — Production Deployment (Go-Live) ✅
+
+### วัตถุประสงค์
+เตรียมระบบให้ deploy ขึ้น production จริงได้ (DB ย้ายไป Postgres/Neon เสร็จไปตั้งแต่ก่อน Phase 19 แล้ว) ครอบคลุม: แก้บั๊กที่ block production build, ตั้งค่า environment/domain จริง, เตรียม git repo, เตรียม+ทำ deploy จริงบน VPS พร้อม SSL, และเปิด Google OAuth login จริง
+
+### 20A — บั๊กที่บล็อก production build (พบระหว่างตรวจสอบก่อน go-live)
+
+| บั๊ก | ไฟล์ | อาการ | วิธีแก้ |
+|------|------|-------|---------|
+| Admin Overview ตัวเลขขึ้น 0 หมด | `app/admin/page.tsx` | Postgres fold unquoted alias เป็นตัวพิมพ์เล็ก (`activeInstallers` → `activeinstallers`) ทำให้ `data.stats.activeInstallers` เป็น `undefined` แล้ว fallback `?? 0` | ใส่ quote ล้อม alias ทุกตัว + cast `Number()` |
+| `npm run build` fail ที่ font | `app/layout.tsx` | `next/font/google` ต้อง fetch `fonts.googleapis.com` ตอน build — fail ถ้า build server ต่อเน็ตไม่ได้ | เปลี่ยนไป self-host ด้วย `@fontsource/sarabun` (ไฟล์ฟอนต์ bundle มาในเครื่อง ไม่ fetch เครือข่ายตอน build) |
+| `npm run build` fail ที่ `/login` | `app/(auth)/login/page.tsx` | ใช้ `useSearchParams()` โดยไม่มี Suspense boundary — Next.js บังคับ error ตอน static generation | ห่อ component ด้วย `<Suspense>` (เหมือนที่ `reset-password` ทำไว้อยู่แล้ว) |
+| `npm ci` fail บน VPS จริง | `frontend/package.json` | `better-sqlite3` (เศษจากยุค SQLite ก่อน migrate ไป Postgres) เป็น native module ต้อง compile ด้วย `make`/gcc ที่ minimal Debian ไม่มีมาให้ — ไม่ได้ใช้จริงในโค้ดแล้ว (เหลือแค่ comment อ้างถึงใน `lib/db.ts`) | ลบออกจาก `dependencies`/`devDependencies` ทั้งคู่ |
+
+### 20B — Environment & Domain config
+
+- โดเมนจริง: **`solarthani.com`** (เปลี่ยนจาก placeholder เดิมที่พิมพ์ผิดเป็น `sorathani.com` ระหว่างคุยกัน — grep ทั้ง repo แก้ให้ตรงหมดแล้ว)
+- พบว่า `NEXT_PUBLIC_APP_URL`/`NEXTAUTH_URL` ใน `.env.local` ตั้งผิดพอร์ต (`:3001` ทั้งที่ dev server รันที่ `:3000`) และ hardcoded fallback `localhost:3001` กระจายอยู่ใน 12 ไฟล์ (OAuth routes, `lib/email.ts`, review-verify) — แก้ให้ตรงหมด
+- พบ env var คนละตัวที่ไม่เคยรู้จัก: `robots.ts`/`sitemap.ts` ใช้ `NEXT_PUBLIC_SITE_URL` (ไม่ใช่ `NEXT_PUBLIC_APP_URL`) และ fallback เป็นโดเมนคนละอันคือ `solarpanelthailand.com` — เพิ่ม env var นี้เข้าไปให้ครบ, เพิ่ม `metadataBase` ใน `layout.tsx` ด้วย (แก้ warning OG/Twitter image resolve ผิด)
+- สร้าง `.env.local.example` (ไม่เคยมีมาก่อนทั้งที่เอกสารอ้างถึง) และ `.env.production` (โหลดอัตโนมัติตอน `NODE_ENV=production`, อยู่นอก git)
+- ตรวจสอบแล้ว **SMTP อ่านจาก DB เป็นหลัก** (`site_content.smtp_user/smtp_pass` ผ่านหน้า Admin) `.env.local`/`.env.production`'s `SMTP_*` เป็นแค่ fallback เผื่อ DB ว่าง — ลบรหัสผ่านดิบที่ดูเหมือนรหัส Gmail จริง (ไม่ใช่ App Password) ออกจาก env files ทั้งหมด เพราะไม่เคยถูกใช้งานจริงอยู่แล้ว
+- ลบ `/api/admin/seed` endpoint ทิ้ง (ใช้ครั้งเดียวตอน setup admin คนแรก ไม่มีโค้ดส่วนไหนเรียกใช้แล้ว)
+
+### 20C — Uploads: แยก persistent storage ออกจากโค้ด
+
+`lib/upload.ts`/`app/uploads/[...path]/route.ts` เดิม hardcode `UPLOADS_ROOT = path.join(process.cwd(), '..', 'uploads')` — เปราะบางเวลารันผ่าน process manager (คนละ cwd) และไม่มีทางแยก storage ออกจาก deploy directory ได้เลย
+
+**แก้:** เพิ่ม `UPLOADS_DIR` env var (absolute path) เป็นตัวเลือกแรก fallback ไปพฤติกรรมเดิมถ้าไม่ตั้ง — ทำให้บน VPS ตั้งให้ชี้ไปที่ persistent disk แยกจากโฟลเดอร์โค้ดได้ (`/var/www/solarthani/uploads` แยกจาก `/var/www/solarthani/frontend`) กัน `git pull` รอบถัดไปลบ/ทับไฟล์ที่อัปโหลดไว้ — ย้ายข้อมูลเดิม 213MB จากเครื่อง dev ไป VPS ผ่าน `scp -r` (rsync ไม่มีในเครื่อง dev) สำเร็จครบ
+
+### 20D — Git + Deploy tooling
+
+- Init git repo ที่ root (`g:\SolarPanel`, ไม่ใช่แค่ `frontend/`) — เพิ่ม root `.gitignore` กัน `/uploads` (213MB) และไฟล์ SQLite เก่า (`*.db*`, มีข้อมูล lead/user จริงอยู่) ไม่ให้หลุดเข้า repo
+- Push ขึ้น `https://github.com/Mykobyhub/SolarThani.git`
+- สร้างโฟลเดอร์ `deploy/` ใหม่:
+  - `deploy/ecosystem.config.js` — PM2 config รัน `next start -p 3000` โดยตรง (ไม่ผ่าน npm wrapper) พร้อม `autorestart`
+  - `deploy/nginx/solarthani.com.conf` — reverse proxy port 80/443 → 3000, `client_max_body_size 10M`
+  - `deploy/setup-vps.sh` — สคริปต์ setup ครั้งแรกทั้งหมด (Node 22, nginx, certbot, PM2, SSL) รองรับทั้ง root login ตรงๆ (Hostinger default, ไม่มี `sudo` ติดตั้งมา) และ user ที่มี sudo — auto-detect ให้
+  - `deploy/README.md` — ขั้นตอน setup ครั้งแรก + วิธี deploy โค้ดใหม่ภายหลัง (`git pull && npm ci && npm run build && pm2 reload`)
+
+### 20E — Go-Live จริง (VPS: Hostinger, Debian 13, IP `187.52.124.122`)
+
+ลำดับที่ทำจริงบน VPS ผ่าน SSH (สร้าง SSH key ใหม่ `~/.ssh/solarthani_vps` เพราะยังไม่เคยมี):
+
+1. Clone repo → ตั้ง `.env.production` (scp, `chmod 600`) → ย้าย `uploads/`
+2. ติดตั้ง Node.js 22, nginx, certbot, PM2 → `npm ci` (เจอบั๊ก `better-sqlite3` ตรงนี้ แก้ที่ต้นทางแล้ว push ใหม่) → `npm run build` สำเร็จ
+3. ตั้ง nginx reverse proxy (HTTP อย่างเดียวก่อน เพราะ DNS ยังไม่ active) → `pm2 start` + `pm2 save` + `pm2 startup` (auto-start ตอน reboot)
+4. **DNS:** โดเมนจดกับ Hostinger ตอนแรกยังใช้ parking nameserver (`dns-parking.com`) ชี้ไป IP parking page — แก้ A record ที่ hPanel DNS Zone Editor ให้ `@` ชี้ไป `187.52.124.122` (CNAME `www → solarthani.com` เดิมไม่ต้องแก้ เพราะตามค่า `@` อัตโนมัติ)
+5. รอ DNS propagate → verify ผ่าน `nslookup` (local resolver + `8.8.8.8`) → รัน `certbot --nginx -d solarthani.com -d www.solarthani.com --redirect` สำเร็จ (cert หมดอายุ 2026-11-29, auto-renew ผ่าน systemd timer)
+6. ทดสอบ end-to-end ผ่าน HTTPS จริง: `/api/health` (200, `env: production`), homepage, `/uploads/...` (ไฟล์ที่ย้ายมาเปิดได้ปกติ), HTTP→HTTPS redirect (301)
+
+### 20F — เปิด Google OAuth Login จริง
+
+พบว่า `oauth_providers` table มี row `google` ที่ `active=1` อยู่ก่อนแล้วแต่ `client_id`/`client_secret` เป็น**ค่าว่างเปล่า** (length 0 ไม่ใช่ NULL) — คือไม่เคยตั้งค่าจริงมาก่อน แค่ toggle active ทิ้งไว้ นอกจากนี้ยังพบว่า **Admin panel ไม่มี UI สำหรับกรอกค่า OAuth provider เลย** (มีแค่ API `/api/admin/oauth-providers` แต่ไม่มีหน้าเรียกใช้) — ยังไม่ได้แก้จุดนี้ (ทำ backlog ไว้)
+
+**ที่ทำไปแล้ว:** สร้าง OAuth 2.0 Client ใน Google Cloud Console (Authorized redirect URI: `https://solarthani.com/api/auth/google/callback`) → เขียน `client_id`/`client_secret` เข้า DB ตรงๆ ผ่าน script (ไม่ต้องรอ UI) → verify ด้วยการเรียก `/api/auth/google` จริงบน production แล้วเช็คว่า Google authorization URL ที่ redirect ไปมี `client_id`/`redirect_uri` ถูกต้อง — **ใช้งานได้จริงแล้ว**
+
+### Backlog (ยังไม่ได้ทำ)
+
+- Admin UI สำหรับจัดการ OAuth providers (ตอนนี้ต้องแก้ DB ตรงๆ)
+- Facebook/Twitter/TikTok OAuth ยังไม่ได้ใส่ credential จริง (มีแค่ row เปล่าใน DB เหมือน Google ก่อนหน้านี้)
+- Rotate `JWT_SECRET` และพิจารณา DB แยก dev/production (ปัจจุบันใช้ Neon instance เดียวกันทั้งคู่)
+- `npm audit`: พบ 10 vulnerabilities (1 moderate, 7 high, 2 critical) ในโปรเจกต์ — ยังไม่ได้ตรวจ/แก้
+
+### Confirmed spec — Sub-contractor Job Assignment (ต่อยอดจาก Milestone Payment, user confirmed 2026-09-08, ยังไม่ implement)
+
+เสนอโดยทีม PO (2026-09-07), user ตัดสินใจ 2026-09-08 ต่อยอดจากระบบ milestone payment escrow ที่มีอยู่แล้ว (`payment_projects`/`payment_milestones`/`payment_transactions`/`payment_disputes` + LINE linking ใน `lib/line/`). ดูสถานะ backlog อื่นด้านบน (npm audit, mock payment provider) ซึ่งแนะนำให้แก้ก่อนเริ่ม feature นี้
+
+- **ประเภทงาน (job category) ที่ยืนยันแล้ว:** สำรวจ, ติดตั้งแผง, เดินสายไฟ, ล้างแผง (ไม่ใช่ inverter แยกต่างหากอย่างที่เสนอไว้รอบแรก)
+- Installer จ้าง sub-contractor และแบ่งงานตามประเภทข้างต้น มอบหมายให้ sub-contractor แต่ละรายดูแล
+- Sub-contractor อัปเดตสถานะงาน (และส่งรูป) ผ่าน LINE ได้เลย โดยไม่ต้อง login เข้า dashboard — reuse flow เดียวกับ `line_link_codes` (เพิ่ม `party='subcontractor'`) แทนที่จะสร้างระบบ auth ใหม่
+- Installer ตรวจรับงาน sub-contractor แล้ว approve (พร้อมให้ installer กด milestone done ต่อ) หรือ reject (ส่งกลับไปแก้)
+- **Sub-contractor จ่ายเงินนอกระบบ (confirmed)** — ไม่ผูกกับ payment_transactions/escrow เลย เป็นแค่ tracking สถานะงาน
+- **ชื่อ sub-contractor ไม่ต้องให้ customer เห็น (confirmed)** — แต่ customer ต้องเห็นสถานะ/ขั้นตอนปัจจุบันของงานได้ (เช่นผ่านหน้า token-link เดิม แสดง stage รวม ไม่ระบุตัวคนทำ)
+- DB สเก็ตช์: ตาราง `subcontractors` (ผูกกับ installer, มี `line_user_id` nullable), `job_assignments` (ผูกกับ `payment_milestones` แถวหนึ่ง, มี `category` enum สำรวจ/ติดตั้งแผง/เดินสายไฟ/ล้างแผง, state machine `assigned → in_progress → submitted → approved/rejected`), `job_assignment_updates` (log ข้อความ/รูปจาก LINE)
+- จุดเชื่อมกับเงิน: sub-contractor approve ไม่ได้ release เงินตรงๆ — เป็นแค่ checklist ภายในของ installer ก่อนที่ installer จะกด mark-milestone-done (แจ้ง customer ต่อ) เอง
+- Effort โดยประมาณ: L
+
+**Supplier sourcing feature (Feature 2 เดิม): ไม่ทำ** — user ตัดสินใจ 2026-09-08 ไม่เอา ไม่ต้องพิจารณาต่อ
+
+### ไฟล์ที่สร้าง/แก้ไข (Phase 20)
+
+| ไฟล์ | การเปลี่ยนแปลง |
+|------|--------------|
+| `app/admin/page.tsx` | Quote SQL alias + cast `Number()` แก้บั๊ก Admin Overview ขึ้น 0 |
+| `app/layout.tsx` | เปลี่ยน font เป็น self-host (`@fontsource/sarabun`), เพิ่ม `metadataBase` |
+| `app/(auth)/login/page.tsx` | ห่อ `<Suspense>` แก้ build error |
+| `app/robots.ts`, `app/sitemap.ts` | แก้ fallback domain เป็น `solarthani.com` |
+| `lib/upload.ts`, `app/uploads/[...path]/route.ts` | เพิ่ม `UPLOADS_DIR` env var, รวม `UPLOADS_ROOT` เหลือแหล่งเดียว |
+| `app/api/admin/seed/route.ts` | **ลบ** — ไม่ใช้แล้ว |
+| `frontend/package.json`, `package-lock.json` | ลบ `better-sqlite3`/`@types/better-sqlite3` (unused, บล็อก build บน VPS) |
+| `.env.local.example` | **ใหม่** — template สำหรับ setup เครื่องใหม่ |
+| `.env.production` | **ใหม่** (นอก git) — ค่าจริงสำหรับ production |
+| `.gitignore` (root) | **ใหม่** — กัน `/uploads`, `*.db*` |
+| `deploy/ecosystem.config.js`, `deploy/nginx/solarthani.com.conf`, `deploy/setup-vps.sh`, `deploy/README.md` | **ใหม่ทั้งหมด** — deploy tooling |
+| 12 ไฟล์ OAuth routes + `lib/email.ts` | แก้ hardcoded fallback port `:3001` → `:3000` |

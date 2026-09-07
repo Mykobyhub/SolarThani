@@ -22,7 +22,21 @@ export async function GET(req: NextRequest) {
          COALESCE((SELECT json_agg(x ORDER BY x.seq) FROM (
            SELECT m.*,
              (SELECT provider_reference_id FROM payment_transactions t WHERE t.milestone_id = m.id AND t.type = 'release' ORDER BY t.created_at DESC LIMIT 1) AS release_reference,
-             (SELECT created_at FROM payment_transactions t WHERE t.milestone_id = m.id AND t.type = 'release' ORDER BY t.created_at DESC LIMIT 1) AS release_transferred_at
+             (SELECT created_at FROM payment_transactions t WHERE t.milestone_id = m.id AND t.type = 'release' ORDER BY t.created_at DESC LIMIT 1) AS release_transferred_at,
+             -- Sub-contractor Job Assignment (installer-facing only — never nested into the
+             -- customer-facing project endpoint): one row per assigned job category on this
+             -- milestone, with the current assignee's name/phone/LINE-link status and a photo
+             -- thumbnail list pulled from job_assignment_updates.
+             COALESCE((SELECT json_agg(j ORDER BY j.category) FROM (
+               SELECT ja.*,
+                 s.name AS subcontractor_name, s.phone AS subcontractor_phone, s.line_user_id AS subcontractor_line_user_id,
+                 ps.name AS previous_subcontractor_name,
+                 COALESCE((SELECT json_agg(u.body ORDER BY u.created_at DESC) FROM job_assignment_updates u WHERE u.job_assignment_id = ja.id AND u.kind = 'photo'), '[]'::json) AS photos
+               FROM job_assignments ja
+               JOIN subcontractors s ON s.id = ja.subcontractor_id
+               LEFT JOIN subcontractors ps ON ps.id = ja.previous_subcontractor_id
+               WHERE ja.milestone_id = m.id
+             ) j), '[]'::json) AS jobs
            FROM payment_milestones m WHERE m.project_id = p.id
          ) x), '[]'::json) AS milestones
        FROM payment_projects p

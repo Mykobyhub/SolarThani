@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getProjectByToken, isMilestoneUnblocked, type PaymentMilestoneRow } from '@/lib/payment/service';
 import { getLineConfig } from '@/lib/line/send';
+import { computeProjectJobStageRollup } from '@/lib/subcontractor/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
   const lineCfg = await getLineConfig();
 
+  // Sub-contractor job stage tracker (design spec §4) — project-wide, category/stage pairs only.
+  // computeProjectJobStageRollup() never returns subcontractor identity by construction; nothing
+  // below ever touches the `subcontractors`/`job_assignments` tables directly, so there is no way
+  // for a name/phone to leak into this customer-facing response.
+  const jobStageRollup = await computeProjectJobStageRollup(project.id);
+
   return NextResponse.json({
     success: true,
     project: {
@@ -63,5 +70,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     receipts,
     pendingAction,
     line: { enabled: lineCfg.enabled, oaBasicId: lineCfg.oaBasicId },
+    jobStageRollup,
   });
 }
