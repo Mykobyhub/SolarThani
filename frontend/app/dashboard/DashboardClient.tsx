@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import type { Installer, Lead } from '@/types';
 import PaymentProjectsTab from './PaymentProjectsTab';
 import SubcontractorsTab from './SubcontractorsTab';
+import { COMMISSION_PERCENT_MIN, COMMISSION_PERCENT_MAX, COMMISSION_FLAT_MIN, COMMISSION_FLAT_MAX } from '@/lib/affiliate/constants';
 
 const THAI_PROVINCES = [
   'กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','ขอนแก่น',
@@ -68,6 +69,9 @@ export default function DashboardClient({
       try { return JSON.parse(installer.service_provinces || '[]') as string[]; }
       catch { return installer.location ? [installer.location] : []; }
     })(),
+    affiliate_enabled: !!installer.affiliate_enabled,
+    affiliate_commission_type: (installer.affiliate_commission_type === 'flat' ? 'flat' : 'percent') as 'percent' | 'flat',
+    affiliate_commission_value: installer.affiliate_commission_value ?? 0,
   });
   const [locationInput, setLocationInput] = useState('');
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -110,6 +114,15 @@ export default function DashboardClient({
 
   async function saveProfile(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (profileForm.affiliate_enabled) {
+      const min = profileForm.affiliate_commission_type === 'percent' ? COMMISSION_PERCENT_MIN : COMMISSION_FLAT_MIN;
+      const max = profileForm.affiliate_commission_type === 'percent' ? COMMISSION_PERCENT_MAX : COMMISSION_FLAT_MAX;
+      const val = Number(profileForm.affiliate_commission_value);
+      if (isNaN(val) || val < min || val > max) {
+        showAlert('error', `ค่าคอมมิชชัน Affiliate ต้องอยู่ระหว่าง ${min}-${max}${profileForm.affiliate_commission_type === 'percent' ? '%' : ' บาท'}`);
+        return;
+      }
+    }
     setSaving(true);
     const res = await fetch('/api/installer/me', {
       method: 'PUT',
@@ -759,6 +772,81 @@ export default function DashboardClient({
                     </div>
                     <p className="text-xs text-[var(--color-muted)] mt-1">ใช้อีเมลนี้เพื่อเข้าสู่ระบบ ไม่สามารถแก้ไขได้</p>
                   </div>
+                </div>
+                <div className="divider" />
+
+                {/* Affiliate program opt-in + commission config */}
+                <div className="mb-6">
+                  <h2 className="font-bold text-base mb-1">🤝 โปรแกรม Affiliate</h2>
+                  <p className="text-xs text-[var(--color-muted)] mb-4">เปิดรับลูกค้าจาก Affiliate — เมื่อลูกค้าที่แนะนำโดย Affiliate ปิดงานและปล่อยเงินตามงวด ระบบจะคำนวณค่าคอมมิชชันให้อัตโนมัติ</p>
+                  <form onSubmit={saveProfile} className="space-y-4 max-w-md">
+                    <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium">เปิดใช้งานโปรแกรม Affiliate</div>
+                        <div className="text-xs text-[var(--color-muted)]">ปิดอยู่โดยค่าเริ่มต้น</div>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={profileForm.affiliate_enabled}
+                          onChange={(e) => setProfileForm((f) => ({ ...f, affiliate_enabled: e.target.checked }))}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </div>
+
+                    {profileForm.affiliate_enabled && (
+                      <>
+                        <div className="form-group">
+                          <label className="form-label">ประเภทค่าคอมมิชชัน</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="radio"
+                                name="affiliate_commission_type"
+                                checked={profileForm.affiliate_commission_type === 'percent'}
+                                onChange={() => setProfileForm((f) => ({ ...f, affiliate_commission_type: 'percent' }))}
+                              />
+                              เปอร์เซ็นต์ (%)
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="radio"
+                                name="affiliate_commission_type"
+                                checked={profileForm.affiliate_commission_type === 'flat'}
+                                onChange={() => setProfileForm((f) => ({ ...f, affiliate_commission_type: 'flat' }))}
+                              />
+                              จำนวนคงที่ (บาท)
+                            </label>
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">
+                            มูลค่าคอมมิชชัน {profileForm.affiliate_commission_type === 'percent'
+                              ? `(${COMMISSION_PERCENT_MIN}-${COMMISSION_PERCENT_MAX}%)`
+                              : `(${COMMISSION_FLAT_MIN.toLocaleString('th-TH')}-${COMMISSION_FLAT_MAX.toLocaleString('th-TH')} บาท)`}
+                          </label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            min={profileForm.affiliate_commission_type === 'percent' ? COMMISSION_PERCENT_MIN : COMMISSION_FLAT_MIN}
+                            max={profileForm.affiliate_commission_type === 'percent' ? COMMISSION_PERCENT_MAX : COMMISSION_FLAT_MAX}
+                            value={profileForm.affiliate_commission_value}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, affiliate_commission_value: parseFloat(e.target.value) || 0 }))}
+                          />
+                          <p className="text-xs text-[var(--color-muted)] mt-1">
+                            {profileForm.affiliate_commission_type === 'percent'
+                              ? 'คำนวณจากยอดแต่ละงวดที่ปล่อยเงิน ทุกครั้งที่มีการปล่อยเงิน'
+                              : 'จ่ายครั้งเดียวเมื่องวดแรกของโครงการถูกปล่อยเงินสำเร็จ'}
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                      {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า Affiliate'}
+                    </button>
+                  </form>
                 </div>
                 <div className="divider" />
                 <h2 className="font-bold text-base mb-5">เปลี่ยนรหัสผ่าน</h2>

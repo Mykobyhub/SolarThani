@@ -345,3 +345,108 @@ CREATE INDEX idx_subcontractors_installer          ON subcontractors(installer_i
 CREATE INDEX idx_job_assignments_milestone         ON job_assignments(milestone_id);
 CREATE INDEX idx_job_assignments_subcontractor     ON job_assignments(subcontractor_id);
 CREATE INDEX idx_job_assignment_updates_job        ON job_assignment_updates(job_assignment_id);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Affiliate / Referral Program — Phase 1 (DB schema only, round 1). New
+-- public role (`affiliates`, fully separate from installers/customers) that
+-- earns a commission when a milestone it referred is released
+-- (`payment_milestones.released_at`), not at lead creation. See
+-- SolarPanel-Requirements.md, "Confirmed spec — Affiliate / Referral
+-- Program" (~line 3784) for the full lifecycle/attribution/anti-fraud rules.
+-- See scripts/migrate-affiliate-program.mjs for the idempotent migration
+-- applied against the already-live Neon DB.
+--
+-- Ordering note: affiliate_payouts is declared BEFORE affiliate_commissions
+-- even though it's the "later" concept in the payout lifecycle, because
+-- affiliate_commissions.payout_id FK-references it.
+-- ─────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE affiliates (
+    id                    SERIAL PRIMARY KEY,
+    email                 TEXT UNIQUE NOT NULL,
+    password_hash         TEXT NOT NULL,
+    name                  TEXT NOT NULL,
+    phone                 TEXT,
+    referral_code         TEXT UNIQUE NOT NULL,
+    status                TEXT NOT NULL DEFAULT 'pending_verification'
+                          CHECK (status IN ('pending_verification','active','suspended')),
+    payout_bank_name      TEXT,
+    payout_account_number TEXT,
+    payout_account_name   TEXT,
+    verified_at           TIMESTAMP,
+    created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Email-verify token, mirrors password_resets' shape — required before an
+-- affiliate's referral code is usable (anti-fraud: no throwaway signups).
+CREATE TABLE affiliate_verifications (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    token        TEXT NOT NULL,
+    expires_at   TIMESTAMP NOT NULL,
+    used         INTEGER DEFAULT 0,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- installers: opt-in + commission config per installer (same ALTER TABLE
+-- pattern as line_user_id above). Global percent/flat caps are hardcoded
+-- constants in round 1 (frontend/lib/affiliate/constants.ts), not enforced
+-- at the DB level.
+ALTER TABLE installers ADD COLUMN affiliate_enabled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE installers ADD COLUMN affiliate_commission_type TEXT DEFAULT 'percent'
+  CHECK (affiliate_commission_type IN ('percent','flat'));
+ALTER TABLE installers ADD COLUMN affiliate_commission_value DOUBLE PRECISION DEFAULT 0;
+
+CREATE TABLE affiliate_clicks (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    installer_id INTEGER REFERENCES installers(id),  -- NULL = site-wide link, resolved later at lead time
+    ip_hash      TEXT,
+    user_agent   TEXT,
+    landing_path TEXT,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- leads: tag affiliate + snapshot commission terms at the moment the lead is
+-- created, so a later change to the installer's commission rate can't affect
+-- an already-tagged lead.
+ALTER TABLE leads ADD COLUMN affiliate_id INTEGER REFERENCES affiliates(id);
+ALTER TABLE leads ADD COLUMN affiliate_commission_type TEXT;
+ALTER TABLE leads ADD COLUMN affiliate_commission_value DOUBLE PRECISION;
+
+CREATE TABLE affiliate_payouts (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    total_amount DOUBLE PRECISION NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','cancelled')),
+    reference    TEXT,
+    admin_id     INTEGER REFERENCES installers(id),  -- reuse installers.role='admin', same as payment_disputes.resolved_by_admin_id
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at      TIMESTAMP
+);
+
+CREATE TABLE affiliate_commissions (
+    id                SERIAL PRIMARY KEY,
+    affiliate_id      INTEGER NOT NULL REFERENCES affiliates(id),
+    lead_id           INTEGER REFERENCES leads(id),
+    project_id        INTEGER REFERENCES payment_projects(id),
+    milestone_id      INTEGER REFERENCES payment_milestones(id),
+    installer_id      INTEGER NOT NULL REFERENCES installers(id),
+    commission_type   TEXT NOT NULL CHECK (commission_type IN ('percent','flat')),
+    base_amount       DOUBLE PRECISION NOT NULL,   -- milestone.amount (percent) or project total (flat)
+    commission_amount DOUBLE PRECISION NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','eligible','paid','clawed_back')),
+    payout_id         INTEGER REFERENCES affiliate_payouts(id),
+    clawback_reason   TEXT,
+    computed_at       TIMESTAMP,
+    paid_at           TIMESTAMP,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_affiliate_clicks_affiliate      ON affiliate_clicks(affiliate_id);
+CREATE INDEX idx_affiliate_commissions_affiliate ON affiliate_commissions(affiliate_id);
+CREATE INDEX idx_affiliate_commissions_installer ON affiliate_commissions(installer_id);
+CREATE INDEX idx_affiliate_commissions_milestone ON affiliate_commissions(milestone_id);
+CREATE INDEX idx_affiliates_referral_code         ON affiliates(referral_code);

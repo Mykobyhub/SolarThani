@@ -4,6 +4,7 @@ import { stripTags, isValidEmail } from '@/lib/sanitize';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, buildLeadAdminNotifyEmail, buildLeadConfirmationEmail, buildInstallerNewLeadEmail } from '@/lib/email';
 import { saveFile } from '@/lib/upload';
+import { SP_REF_COOKIE_NAME, parseSpRefCookie } from '@/lib/affiliate/ref-cookie';
 import path from 'path';
 
 export const dynamic = 'force-dynamic';
@@ -61,10 +62,55 @@ export async function POST(req: NextRequest) {
     calc_file:    calcFile,
   };
 
+  // Affiliate attribution — only possible once the lead has a target
+  // installer (the lead's own installer_id always wins over the cookie's own
+  // installerId for site-wide links, per the confirmed spec: "installer ที่
+  // lead เลือกมี affiliate_enabled=1"). Snapshot commission terms at this
+  // exact moment so a later change to the installer's rate can't affect an
+  // already-tagged lead.
+  let affiliateId: number | null = null;
+  let affiliateCommissionType: string | null = null;
+  let affiliateCommissionValue: number | null = null;
+
+  if (lead.installer_id) {
+    const refPayload = parseSpRefCookie(req.cookies.get(SP_REF_COOKIE_NAME)?.value);
+    if (refPayload) {
+      const targetInstaller = (await db.prepare(`
+        SELECT id, email, contact_email, affiliate_enabled, affiliate_commission_type, affiliate_commission_value
+        FROM installers WHERE id = ?
+      `).get(lead.installer_id)) as Record<string, unknown> | undefined;
+
+      if (targetInstaller && Number(targetInstaller.affiliate_enabled) === 1) {
+        const affiliate = (await db.prepare(
+          `SELECT id, email FROM affiliates WHERE id = ? AND status = 'active'`
+        ).get(refPayload.affiliateId)) as { id: number; email: string } | undefined;
+
+        if (affiliate) {
+          // Self-referral guard: compare affiliate's registered email against
+          // both the installer's login email and its public contact_email.
+          const affiliateEmail = affiliate.email.toLowerCase().trim();
+          const installerEmail = String(targetInstaller.email || '').toLowerCase().trim();
+          const installerContactEmail = String(targetInstaller.contact_email || '').toLowerCase().trim();
+          const isSelfReferral =
+            affiliateEmail === installerEmail || (!!installerContactEmail && affiliateEmail === installerContactEmail);
+
+          if (!isSelfReferral) {
+            affiliateId = affiliate.id;
+            affiliateCommissionType = targetInstaller.affiliate_commission_type as string;
+            affiliateCommissionValue = targetInstaller.affiliate_commission_value as number;
+          }
+        }
+      }
+    }
+  }
+
   await db.prepare(`
-    INSERT INTO leads (name, email, phone, province, message, installer_id, calc_data, calc_file)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(lead.name, lead.email, lead.phone, lead.province, lead.message, lead.installer_id, lead.calc_data, lead.calc_file);
+    INSERT INTO leads (name, email, phone, province, message, installer_id, calc_data, calc_file, affiliate_id, affiliate_commission_type, affiliate_commission_value)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    lead.name, lead.email, lead.phone, lead.province, lead.message, lead.installer_id, lead.calc_data, lead.calc_file,
+    affiliateId, affiliateCommissionType, affiliateCommissionValue
+  );
 
   const adminEmail = process.env.ADMIN_EMAIL || '';
   if (adminEmail) {

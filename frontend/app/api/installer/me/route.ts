@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { stripTags } from '@/lib/sanitize';
 import { getSessionFromRequest } from '@/lib/auth';
+import { COMMISSION_PERCENT_MIN, COMMISSION_PERCENT_MAX, COMMISSION_FLAT_MIN, COMMISSION_FLAT_MAX } from '@/lib/affiliate/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
     SELECT id, email, name, description, phone, location, about, logo_url, status, role, created_at,
            experience, contact_email, line_id, response_time, warranty_panel, warranty_inverter, warranty_workmanship,
            services, certifications, profile_views, lat, lng, service_provinces,
-           youtube_url, tiktok_url, facebook_url, website_url
+           youtube_url, tiktok_url, facebook_url, website_url,
+           affiliate_enabled, affiliate_commission_type, affiliate_commission_value
     FROM installers WHERE id = ?
   `).get(session.id)) as Record<string, unknown> | undefined;
 
@@ -38,10 +40,31 @@ export async function PUT(req: NextRequest) {
     services, certifications,
     lat, lng, service_provinces,
     youtube_url, tiktok_url, facebook_url, website_url,
+    affiliate_enabled, affiliate_commission_type, affiliate_commission_value,
   } = body;
 
   if (!name || stripTags(name).length < 2)
     return NextResponse.json({ success: false, message: 'กรุณากรอกชื่อบริษัท' }, { status: 400 });
+
+  // Affiliate program opt-in + commission config (Phase 4). Validated server-side too —
+  // never trust the client-side check in DashboardClient alone. Range only enforced while
+  // the program is actually enabled, so a never-touched default (value=0) doesn't block
+  // saving unrelated profile fields.
+  const affiliateEnabled = affiliate_enabled ? 1 : 0;
+  const affiliateCommissionType = affiliate_commission_type === 'flat' ? 'flat' : 'percent';
+  const affiliateCommissionValue = affiliate_commission_value != null && affiliate_commission_value !== ''
+    ? parseFloat(affiliate_commission_value) : 0;
+
+  if (affiliateEnabled) {
+    const min = affiliateCommissionType === 'percent' ? COMMISSION_PERCENT_MIN : COMMISSION_FLAT_MIN;
+    const max = affiliateCommissionType === 'percent' ? COMMISSION_PERCENT_MAX : COMMISSION_FLAT_MAX;
+    if (isNaN(affiliateCommissionValue) || affiliateCommissionValue < min || affiliateCommissionValue > max) {
+      return NextResponse.json({
+        success: false,
+        message: `ค่าคอมมิชชัน Affiliate ต้องอยู่ระหว่าง ${min}-${max}${affiliateCommissionType === 'percent' ? '%' : ' บาท'}`,
+      }, { status: 400 });
+    }
+  }
 
   const svcJson  = Array.isArray(services)          ? JSON.stringify(services.map((s: unknown) => stripTags(String(s))).filter(Boolean))          : null;
   const certJson = Array.isArray(certifications)    ? JSON.stringify(certifications.map((c: unknown) => stripTags(String(c))).filter(Boolean))    : null;
@@ -57,7 +80,8 @@ export async function PUT(req: NextRequest) {
       warranty_panel=?, warranty_inverter=?, warranty_workmanship=?,
       services=?, certifications=?,
       lat=?, lng=?, service_provinces=?,
-      youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?
+      youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?,
+      affiliate_enabled=?, affiliate_commission_type=?, affiliate_commission_value=?
     WHERE id=?
   `).run(
     stripTags(name),
@@ -78,6 +102,7 @@ export async function PUT(req: NextRequest) {
     tiktok_url   ? String(tiktok_url).trim()   : null,
     facebook_url ? String(facebook_url).trim() : null,
     website_url  ? String(website_url).trim()  : null,
+    affiliateEnabled, affiliateCommissionType, affiliateCommissionValue,
     session.id
   );
 

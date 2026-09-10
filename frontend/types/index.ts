@@ -47,6 +47,9 @@ export interface Installer {
   tiktok_url: string | null;
   facebook_url: string | null;
   website_url: string | null;
+  affiliate_enabled: number;
+  affiliate_commission_type: 'percent' | 'flat' | null;
+  affiliate_commission_value: number;
 }
 
 export type InstallerPublic = Omit<Installer, 'password_hash' | 'oauth_id'>;
@@ -168,6 +171,35 @@ export interface JwtPayload {
   email: string;
   role: 'installer' | 'admin';
   name: string;
+}
+
+// Affiliate is a fully separate public role from installers/admin (own session
+// cookie/table, see lib/auth.ts's getAffiliateSession()) — kept as its own
+// payload shape rather than widening JwtPayload.role, since installer/admin
+// code paths (requireAdmin, etc.) should never accidentally accept it.
+export interface AffiliateJwtPayload {
+  id: number;
+  email: string;
+  role: 'affiliate';
+  name: string;
+}
+
+// ─── Affiliate / Referral Program ────────────────────────────────────────────
+
+export interface Affiliate {
+  id: number;
+  email: string;
+  password_hash: string;
+  name: string;
+  phone: string | null;
+  referral_code: string;
+  status: 'pending_verification' | 'active' | 'suspended';
+  payout_bank_name: string | null;
+  payout_account_number: string | null;
+  payout_account_name: string | null;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ─── Installer filter/query params ───────────────────────────────────────────

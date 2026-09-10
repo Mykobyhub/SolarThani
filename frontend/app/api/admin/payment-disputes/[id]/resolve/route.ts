@@ -5,6 +5,7 @@ import { getPaymentProvider } from '@/lib/payment/provider';
 import { insertTransaction, recomputeProjectStatus, type PaymentDisputeRow, type PaymentMilestoneRow, type PaymentProjectRow } from '@/lib/payment/service';
 import { notifyDisputeResolved } from '@/lib/payment/notify';
 import { stripTags } from '@/lib/sanitize';
+import { createCommissionsForReleasedMilestone, clawbackCommissionsForMilestone } from '@/lib/affiliate/commission-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db
       .prepare("UPDATE payment_disputes SET status = 'resolved_release', admin_resolution = ?, resolved_by_admin_id = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(resolution, session.id, id);
+
+    // Affiliate commission creation — money-adjacent ledger write, always awaited
+    // inline (never fire-and-forget like the notify call below).
+    try {
+      await createCommissionsForReleasedMilestone(milestone.id);
+    } catch (err) {
+      console.error('createCommissionsForReleasedMilestone failed', milestone.id, err);
+    }
   } else {
     const result = await provider.refundHold({
       holdReferenceId: hold?.provider_reference_id || '',
@@ -67,6 +76,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db
       .prepare("UPDATE payment_disputes SET status = 'resolved_refund', admin_resolution = ?, resolved_by_admin_id = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(resolution, session.id, id);
+
+    // Clawback: if this milestone had already generated an affiliate commission
+    // (edge case — a milestone is usually refunded before it's ever released, but
+    // dispute-on-an-already-released-milestone is architecturally possible), flip
+    // it to clawed_back. Always awaited inline, same reasoning as the release branch.
+    try {
+      await clawbackCommissionsForMilestone(milestone.id, `Milestone ถูกคืนเงินจากข้อโต้แย้ง #${id}: ${resolution || 'ไม่มีหมายเหตุ'}`);
+    } catch (err) {
+      console.error('clawbackCommissionsForMilestone failed', milestone.id, err);
+    }
   }
 
   await recomputeProjectStatus(milestone.project_id);

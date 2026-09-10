@@ -3780,3 +3780,176 @@ Body: { "email": "owner@example.com" }
 | `.gitignore` (root) | **ใหม่** — กัน `/uploads`, `*.db*` |
 | `deploy/ecosystem.config.js`, `deploy/nginx/solarthani.com.conf`, `deploy/setup-vps.sh`, `deploy/README.md` | **ใหม่ทั้งหมด** — deploy tooling |
 | 12 ไฟล์ OAuth routes + `lib/email.ts` | แก้ hardcoded fallback port `:3001` → `:3000` |
+
+## Confirmed spec — Affiliate / Referral Program (user confirmed 2026-09-08, ยังไม่ implement)
+
+เสนอโดยทีม PO ต่อยอดจากระบบ Milestone Payment escrow ที่มีอยู่แล้ว (`payment_projects` / `payment_milestones` / `payment_transactions` / `payment_disputes`) และโมเดล lead-gen เดิม (`leads`, `installers`) โดยตัดสินใจล็อกไว้แล้ว 2 ข้อ:
+1. Affiliate เป็น **role สาธารณะใหม่แยกต่างหาก** จาก `installers` และจาก customer — มีสมัคร/login/dashboard ของตัวเอง ไม่ผูกกับบัญชีผู้ติดตั้งหรือลูกค้าเดิม
+2. คำนวณค่าคอมมิชชันที่ **milestone release event จริง** (`payment_milestones.released_at`) ไม่ใช่ตอนสร้าง lead — กันจ่ายคอมมิชชันให้ lead ที่ไม่เคยปิดงานจริง
+
+> **Dependency ที่ควรแก้ก่อน/ระหว่างเริ่ม feature นี้** (ดู backlog ด้านบน): payment provider ยังเป็น mock (ไม่มี payout rail จริง), `npm audit` มี 10 ช่องโหว่ (2 critical), dev/prod ใช้ Neon DB ตัวเดียวกัน, `JWT_SECRET` ยังไม่เคย rotate — เพิ่ม auth role สาธารณะใหม่ (affiliate) ซ้อนบนความเสี่ยงเหล่านี้ยิ่งทำให้ควรแก้ก่อนเปิดสมัครจริง
+
+### Actors
+
+| Actor | ทำอะไรได้ |
+|-------|----------|
+| **Affiliate** (ใหม่) | สมัคร/login แยกระบบ, ดู referral link/code ของตัวเอง, ดู dashboard (คลิก, lead ที่ referred, ยอดคอมมิชชัน pending/eligible/paid), ตั้งค่าบัญชีรับเงิน (ชื่อ/เลขบัญชี/ธนาคาร สำหรับ payout แบบ manual) |
+| **Installer** (เดิม) | เปิด/ปิดการเข้าร่วมโปรแกรม affiliate ของตัวเอง (opt-in), ตั้งประเภทคอมมิชชัน (percent/flat) + มูลค่า ภายใน cap ที่ admin กำหนด |
+| **Admin** (เดิม) | ตั้ง global cap/min ของคอมมิชชัน, ดู ledger คอมมิชชันทั้งระบบ, ทำ manual payout batch, resolve clawback เมื่อ milestone ที่จ่ายคอมมิชชันไปแล้วถูก refund, ระงับบัญชี affiliate ที่โกง |
+| **Customer** | ไม่กระทบ — ไม่เห็น UI เพิ่มเติมใดๆ จากฟีเจอร์นี้ |
+
+### Installer-side controls
+
+- `affiliate_enabled` (boolean toggle ใน Dashboard → ตั้งค่า) — default ปิด
+- `affiliate_commission_type`: `'percent' | 'flat'`
+- `affiliate_commission_value`: เปอร์เซ็นต์ (เช่น 5) หรือจำนวนบาทคงที่ (เช่น 1,500)
+- **Cap ที่ admin กำหนดระดับ global (round 1 เก็บเป็นค่าคงที่ในโค้ด/env, round 2 ค่อยย้ายเป็น admin-configurable ผ่าน `site_content` แบบเดียวกับ `calc_price_*`):** percent สูงสุด 10%, flat สูงสุด 5,000 บาท/งาน, percent ต่ำสุด 1%, flat ต่ำสุด 100 บาท (กันตั้งคอมมิชชันที่ต่ำจนไม่มีความหมายหรือสูงจนผิดปกติ/เข้าข่ายฟอกลูกค้า)
+- **คำนวณจากอะไร:**
+  - `percent` → คำนวณ**ทุกครั้งที่ milestone release** โดยอิงจาก `payment_milestones.amount` ของ milestone นั้นๆ (ไม่ใช่ project total) — ทยอยจ่ายตามจังหวะ escrow เดิม
+  - `flat` → จ่าย**ครั้งเดียวที่ milestone แรกของ project ที่ release สำเร็จ**เท่านั้น (ไม่ซ้ำทุก milestone) — บังคับด้วย logic ตอน compute ไม่ใช่ DB constraint
+
+### Attribution mechanism
+
+- **Referral link 2 แบบ:**
+  1. Installer-specific: `solarthani.com/installers/:id?ref=CODE` — ผูกกับ installer นั้นทันที
+  2. Site-wide: `solarthani.com/?ref=CODE` — ผูก affiliate ไว้ก่อน แล้วค่อย resolve installer_id ตอนลูกค้าส่ง lead จริง (คอมมิชชันเกิดขึ้นได้เฉพาะถ้า installer ที่ lead เลือกมี `affiliate_enabled=1`)
+- คลิกลิงก์ → set cookie `sp_ref` (code + installer_id ถ้ามี + timestamp) อายุ **30 วัน** + บันทึกแถวใน `affiliate_clicks`
+- **Attribution window: 30 วัน, last-click-wins** (คลิกใหม่ทับ cookie เดิมเสมอ) — เลือก last-click เพราะ implement ง่ายกว่า first-click ใน round 1 (ไม่ต้อง track ประวัติ) และตรงกับพฤติกรรม affiliate marketplace ทั่วไป (Shopee/TikTok Shop ก็เป็น last-touch เป็นหลัก)
+- เมื่อลูกค้าส่ง lead (contact form หรือ calculator) ขณะมี cookie `sp_ref` ที่ยังไม่หมดอายุ → snapshot `affiliate_id` + `commission_type`/`commission_value` ของ installer ปลายทาง ณ ขณะนั้นลงในแถว `leads` (กันภายหลัง installer เปลี่ยนค่าคอมมิชชันแล้วกระทบ lead ที่ปิดไปแล้ว)
+
+### Commission lifecycle (ผูกกับ milestone release)
+
+สถานะ: `pending → eligible → paid → clawed_back`
+
+1. **pending** — lead ถูก tag affiliate_id แล้ว แต่ project/milestone ที่เกี่ยวข้องยังไม่ release
+2. **eligible** — hook เข้ากับจุดที่ระบบเดิม set `payment_milestones.released_at` (milestone release event) → สร้างแถวใน `affiliate_commissions` สถานะ `eligible` ทันที (percent: ทุกครั้งที่ release, flat: เฉพาะ release ครั้งแรกของ project)
+3. **paid** — admin รวมยอด eligible ของ affiliate แต่ละคนเป็น batch แล้ว mark paid (manual, ดู Payout ด้านล่าง)
+4. **clawed_back** — ถ้า milestone ที่เคยสร้างคอมมิชชันไปแล้ว (ไม่ว่าจะ eligible หรือ paid แล้วก็ตาม) ถูก resolve เป็น `resolved_refund` ใน `payment_disputes` → flip แถวคอมมิชชันที่เกี่ยวข้องเป็น `clawed_back` — ถ้าเคย paid แล้ว ให้สร้างรายการหักลบ (negative adjustment) หักจากยอด payout ครั้งถัดไปของ affiliate คนนั้น แทนการเรียกเงินคืนจริง (round 1 ไม่มี payout rail อัตโนมัติอยู่แล้ว)
+
+### Payout (manual, round 1 — ยังไม่มี payment gateway จริง)
+
+- Threshold ขั้นต่ำ: **1,000 บาท** ต่อ affiliate ก่อนจะขึ้นในคิว payout (ตั้งเป็นค่าคงที่ก่อน round 1, ย้ายเป็น admin-configurable ใน round 2)
+- Admin Panel เพิ่ม tab/section ใหม่: list affiliate ที่มียอด `eligible` สะสม ≥ threshold → เลือก batch → กด "บันทึกว่าจ่ายแล้ว" พร้อมกรอก reference (เลขที่โอน/หมายเหตุ) — เป็นการบันทึกว่า admin โอนเงินจริงนอกระบบแล้ว ไม่ใช่การสั่งจ่ายอัตโนมัติ (สอดคล้องกับ `payment_transactions.provider='mock'` ที่มีอยู่แล้ว)
+- แถวคอมมิชชันทั้งหมดใน batch นั้นเปลี่ยนสถานะเป็น `paid` พร้อมอ้างอิง `payout_id`
+
+### Anti-fraud พื้นฐาน (round 1 — เน้นเบา ไม่ทำ full fraud detection)
+
+- **กันการอ้างอิงตัวเอง (self-referral):** เทียบอีเมล affiliate กับอีเมล/`contact_email` ของ installer ปลายทางตอน tag lead — ถ้าตรงกัน ไม่ tag affiliate_id (lead ยังบันทึกปกติ แค่ไม่มีคอมมิชชันเกิดขึ้น) และเช็คซ้ำอีกชั้นตอน compute commission ที่ milestone release (defense-in-depth)
+- **Rate-limit คลิก:** จำกัด click ต่อ affiliate ต่อ IP (hash เก็บ ไม่เก็บ IP ดิบ) ไม่เกิน ~20 ครั้ง/ชั่วโมง — เกินแล้วไม่ set cookie ใหม่/ไม่บันทึกแถว `affiliate_clicks` เพิ่ม (เบา ไม่มี CAPTCHA ใน round 1)
+- **ต้อง verify email ก่อนใช้ referral code ได้จริง** (reuse pattern เดียวกับ `password_resets` — โทเค็นหมดอายุสั้น) กันสมัคร throwaway
+- Admin ระงับ (`suspend`) บัญชี affiliate ได้ทันที — โค้ดที่มีอยู่ (`eligible`/`paid`) ไม่กระทบย้อนหลัง แค่บล็อกคลิกใหม่
+
+### New DB tables (สเก็ตช์ — ตาม convention ของ schema.sql เดิม)
+
+```sql
+CREATE TABLE affiliates (
+    id                    SERIAL PRIMARY KEY,
+    email                 TEXT UNIQUE NOT NULL,
+    password_hash         TEXT NOT NULL,
+    name                  TEXT NOT NULL,
+    phone                 TEXT,
+    referral_code         TEXT UNIQUE NOT NULL,
+    status                TEXT NOT NULL DEFAULT 'pending_verification'
+                          CHECK (status IN ('pending_verification','active','suspended')),
+    payout_bank_name      TEXT,
+    payout_account_number TEXT,
+    payout_account_name   TEXT,
+    verified_at           TIMESTAMP,
+    created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE affiliate_verifications (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    token        TEXT NOT NULL,
+    expires_at   TIMESTAMP NOT NULL,
+    used         INTEGER DEFAULT 0,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- installers: opt-in + commission config ต่อผู้ติดตั้ง (ตาม pattern ALTER TABLE เดิมของ line_user_id)
+ALTER TABLE installers ADD COLUMN affiliate_enabled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE installers ADD COLUMN affiliate_commission_type TEXT DEFAULT 'percent'
+  CHECK (affiliate_commission_type IN ('percent','flat'));
+ALTER TABLE installers ADD COLUMN affiliate_commission_value DOUBLE PRECISION DEFAULT 0;
+
+CREATE TABLE affiliate_clicks (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    installer_id INTEGER REFERENCES installers(id),  -- NULL = site-wide link, resolve ทีหลังตอนมี lead
+    ip_hash      TEXT,
+    user_agent   TEXT,
+    landing_path TEXT,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- leads: tag affiliate + snapshot เงื่อนไขคอมมิชชัน ณ ตอนเกิด lead (กันย้อนหลังถูกแก้)
+ALTER TABLE leads ADD COLUMN affiliate_id INTEGER REFERENCES affiliates(id);
+ALTER TABLE leads ADD COLUMN affiliate_commission_type TEXT;
+ALTER TABLE leads ADD COLUMN affiliate_commission_value DOUBLE PRECISION;
+
+CREATE TABLE affiliate_commissions (
+    id                SERIAL PRIMARY KEY,
+    affiliate_id      INTEGER NOT NULL REFERENCES affiliates(id),
+    lead_id           INTEGER REFERENCES leads(id),
+    project_id        INTEGER REFERENCES payment_projects(id),
+    milestone_id      INTEGER REFERENCES payment_milestones(id),
+    installer_id      INTEGER NOT NULL REFERENCES installers(id),
+    commission_type   TEXT NOT NULL CHECK (commission_type IN ('percent','flat')),
+    base_amount       DOUBLE PRECISION NOT NULL,   -- milestone.amount (percent) หรือ project total (flat)
+    commission_amount DOUBLE PRECISION NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','eligible','paid','clawed_back')),
+    payout_id         INTEGER REFERENCES affiliate_payouts(id),
+    clawback_reason   TEXT,
+    computed_at       TIMESTAMP,
+    paid_at           TIMESTAMP,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE affiliate_payouts (
+    id           SERIAL PRIMARY KEY,
+    affiliate_id INTEGER NOT NULL REFERENCES affiliates(id),
+    total_amount DOUBLE PRECISION NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','cancelled')),
+    reference    TEXT,
+    admin_id     INTEGER REFERENCES installers(id),  -- reuse installers.role='admin' แบบเดียวกับ payment_disputes.resolved_by_admin_id
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paid_at      TIMESTAMP
+);
+
+CREATE INDEX idx_affiliate_clicks_affiliate      ON affiliate_clicks(affiliate_id);
+CREATE INDEX idx_affiliate_commissions_affiliate ON affiliate_commissions(affiliate_id);
+CREATE INDEX idx_affiliate_commissions_installer ON affiliate_commissions(installer_id);
+CREATE INDEX idx_affiliate_commissions_milestone ON affiliate_commissions(milestone_id);
+CREATE INDEX idx_affiliates_referral_code         ON affiliates(referral_code);
+```
+
+> หมายเหตุ: `affiliate_payouts` ถูกอ้างอิงจาก `affiliate_commissions.payout_id` ก่อนที่ตัวมันเองจะถูกประกาศ — ตอน implement จริงต้องสร้าง `affiliate_payouts` ก่อน `affiliate_commissions` (หรือเพิ่ม FK ทีหลังด้วย `ALTER TABLE`) ตาม migration script convention เดิม (`scripts/migrate-<feature>-round<N>.mjs`)
+
+### Round 1 (MVP) vs Round 2+ split
+
+**Round 1 — ขั้นต่ำสุดที่ใช้งานได้จริง:**
+- ตาราง `affiliates` + สมัคร/login/verify email + dashboard พื้นฐาน (คลิก, lead, ยอดคอมมิชชัน 4 สถานะ)
+- Installer toggle เปิด/ปิด + ตั้งค่าคอมมิชชัน (percent/flat) ใน Dashboard → ตั้งค่า, cap ระดับ global แบบ hardcode
+- Referral link ทั้ง 2 แบบ (installer-specific + site-wide) + click tracking + cookie 30 วัน last-click
+- Lead tagging ตอน submit (contact form + calculator) พร้อม snapshot commission terms
+- Commission ledger คำนวณอัตโนมัติที่จุด milestone release (hook เข้า flow เดิม) — percent ทุก release, flat ครั้งแรกเท่านั้น
+- Clawback อัตโนมัติเมื่อ dispute resolve เป็น `resolved_refund`
+- Admin: หน้าดู ledger + manual payout batch (mark paid + reference)
+- Anti-fraud เบื้องต้น: self-referral check, click rate-limit, บังคับ verify email, admin suspend ได้
+
+**Round 2+ — ทำทีหลังเมื่อพื้นฐานทำงานได้จริง:**
+- Payout อัตโนมัติผ่าน payment gateway จริง (รอ dependency: เลิก mock provider ก่อน)
+- Fraud detection ที่ลึกขึ้น: device fingerprint, anomaly detection บน conversion rate, คิวตรวจสอบโดย admin
+- Affiliate tier / commission boost ตามผลงาน, leaderboard, gamification
+- ย้าย cap/threshold จาก hardcode → admin-configurable ผ่าน `site_content` (แบบเดียวกับ `calc_price_*`)
+- First-click vs last-click แบบเลือกได้ต่อ campaign, multi-touch attribution reporting
+- ชุด marketing asset สำเร็จรูป (banner, ข้อความโพสต์) ให้ affiliate โหลดใช้
+- API/webhook ให้ affiliate ดึงสถิติของตัวเองแบบ programmatic
+
+### Effort โดยประมาณ
+Round 1: **L** (auth role ใหม่ทั้งระบบ + hook เข้า escrow flow เดิม + admin payout UI) — ใกล้เคียงหรือมากกว่า Milestone Payment round 1
+
+---

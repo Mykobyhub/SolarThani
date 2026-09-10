@@ -101,6 +101,7 @@ export default async function Footer() {
                 { href: '/calculator', label: 'คำนวณราคา' },
                 { href: '/blog',       label: 'บทความ' },
                 { href: '/contact',    label: 'ติดต่อเรา' },
+                { href: '/affiliate',  label: 'โปรแกรม Affiliate' },
               ].map((l) => (
                 <li key={l.href}>
                   <Link href={l.href} className="footer-link">{l.label}</Link>

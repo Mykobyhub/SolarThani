@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { THAI_PROVINCES } from '@/lib/provinces';
 
 export default function ContactForm() {
   const params = useSearchParams();
@@ -15,6 +16,7 @@ export default function ContactForm() {
     name: '',
     email: '',
     phone: '',
+    province: '',
     subject: installerId ? 'ขอใบเสนอราคา' : '',
     message: installerId ? `สนใจขอใบเสนอราคาจากผู้ติดตั้ง ID: ${installerId}` : '',
   });
@@ -38,17 +40,28 @@ export default function ContactForm() {
     setError(''); setSuccess('');
     setLoading(true);
     try {
-      const res = await fetch('/api/contact-message', {
+      const endpoint = installerId ? '/api/contact' : '/api/contact-message';
+      const body = installerId
+        ? {
+            name: form.name,
+            email: form.email,
+            phone: form.phone,
+            province: form.province,
+            message: form.message,
+            installer_id: Number(installerId),
+          }
+        : { ...form, installer_id: undefined };
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, installer_id: installerId ? Number(installerId) : undefined }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
-        setSuccess('ส่งข้อความสำเร็จ! ทีมงานจะติดต่อกลับเร็วๆ นี้');
-        setForm({ name: '', email: '', phone: '', subject: '', message: '' });
+        setSuccess(data.message || 'ส่งข้อความสำเร็จ! ทีมงานจะติดต่อกลับเร็วๆ นี้');
+        setForm({ name: '', email: '', phone: '', province: '', subject: '', message: '' });
       } else {
-        setError(data.error || 'เกิดข้อผิดพลาด');
+        setError(data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : '') || 'เกิดข้อผิดพลาด');
       }
     } catch {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่');
@@ -83,16 +96,26 @@ export default function ContactForm() {
                 <label className="form-label">เบอร์โทร <span className="text-red-500">*</span></label>
                 <input type="tel" className="form-input" placeholder="0X-XXX-XXXX" value={form.phone} onChange={update('phone')} required />
               </div>
-              <div className="form-group">
-                <label className="form-label">หัวข้อ <span className="text-red-500">*</span></label>
-                <select className="form-input" value={form.subject} onChange={update('subject')} required>
-                  <option value="">เลือกหัวข้อ...</option>
-                  <option>ขอใบเสนอราคา</option>
-                  <option>ต้องการสอบถาม</option>
-                  <option>แจ้งปัญหา</option>
-                  <option>อื่นๆ</option>
-                </select>
-              </div>
+              {installerId ? (
+                <div className="form-group">
+                  <label className="form-label">จังหวัด <span className="text-red-500">*</span></label>
+                  <select className="form-input" value={form.province} onChange={update('province')} required>
+                    <option value="">เลือกจังหวัด...</option>
+                    {THAI_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label className="form-label">หัวข้อ <span className="text-red-500">*</span></label>
+                  <select className="form-input" value={form.subject} onChange={update('subject')} required>
+                    <option value="">เลือกหัวข้อ...</option>
+                    <option>ขอใบเสนอราคา</option>
+                    <option>ต้องการสอบถาม</option>
+                    <option>แจ้งปัญหา</option>
+                    <option>อื่นๆ</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">ข้อความ <span className="text-red-500">*</span></label>

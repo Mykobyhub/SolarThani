@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getPaymentProvider } from '@/lib/payment/provider';
 import { getProjectByToken, insertTransaction, recomputeProjectStatus, type PaymentMilestoneRow } from '@/lib/payment/service';
 import { notifyCustomerDecision } from '@/lib/payment/notify';
+import { createCommissionsForReleasedMilestone } from '@/lib/affiliate/commission-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .prepare("UPDATE payment_milestones SET status = 'released', released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(milestone.id);
   await recomputeProjectStatus(project.id);
+
+  // Affiliate commission creation — money-adjacent ledger write, always awaited
+  // inline (never fire-and-forget like the notify call below). Non-fatal to this
+  // response on failure since the release itself already succeeded.
+  try {
+    await createCommissionsForReleasedMilestone(milestone.id);
+  } catch (err) {
+    console.error('createCommissionsForReleasedMilestone failed', milestone.id, err);
+  }
 
   notifyCustomerDecision(project, { ...milestone, status: 'released' }, 'released').catch(() => {}); // fire-and-forget, see resolve/route.ts
 

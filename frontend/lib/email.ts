@@ -289,6 +289,21 @@ export async function buildProjectCancelledEmail(recipientName: string, projectT
   );
 }
 
+// ── Affiliate / Referral Program — auth emails ──
+
+export async function buildAffiliateVerifyEmail(name: string, verifyUrl: string): Promise<string> {
+  return emailLayout(
+    'ยืนยันอีเมลสำหรับโปรแกรม Affiliate',
+    `<h2 style="color:#00b8a0;">ยินดีต้อนรับ, ${name}!</h2>
+     <p>ขอบคุณที่สมัครเข้าร่วมโปรแกรม Affiliate ของ Solar Thani Thailand กรุณายืนยันอีเมลของคุณเพื่อเปิดใช้งานรหัสแนะนำ (referral code)</p>
+     <a href="${verifyUrl}"
+        style="display:inline-block;background:#00b8a0;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px;">
+       ยืนยันอีเมล
+     </a>
+     <p style="color:#6b7c7a;font-size:13px;margin-top:16px;">ลิงก์นี้มีอายุ 24 ชั่วโมง</p>`
+  );
+}
+
 export async function buildContactSupportEmail(msg: { name: string; email: string; phone?: string | null; subject?: string | null; message: string }): Promise<string> {
   const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
   return emailLayout(

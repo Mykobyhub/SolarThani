@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Suspense } from 'react';
 import '@fontsource/sarabun/300.css';
 import '@fontsource/sarabun/400.css';
 import '@fontsource/sarabun/500.css';
@@ -8,6 +9,7 @@ import '@fontsource/sarabun/700.css';
 import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import AffiliateRefTracker from '@/components/layout/AffiliateRefTracker';
 import { db } from '@/lib/db';
 
 async function getSiteSettings() {
@@ -44,6 +46,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="th">
       <body className="min-h-screen flex flex-col antialiased">
+        <Suspense fallback={null}>
+          <AffiliateRefTracker />
+        </Suspense>
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
