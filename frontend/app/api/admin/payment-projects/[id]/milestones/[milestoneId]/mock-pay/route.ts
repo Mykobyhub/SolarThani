@@ -33,14 +33,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const result = await provider.createHold({ amount: milestone.amount, projectId: Number(id), milestoneId: milestone.id });
   if (!result.success) return NextResponse.json({ success: false, message: 'การชำระเงินไม่สำเร็จ' }, { status: 502 });
 
-  await insertTransaction({
-    milestoneId: milestone.id,
-    type: 'hold',
-    provider: provider.name,
-    providerReferenceId: result.referenceId,
-    amount: milestone.amount,
-    status: result.status,
-  });
+  // result.reused means createHold() found and re-fetched an already-pending charge instead of
+  // creating a new one (see lib/payment/omise-provider.ts) — update that row instead of
+  // inserting a second one for the same underlying charge. Same fix as the customer-facing
+  // pay route (app/api/customer/.../pay/route.ts).
+  if (result.reused) {
+    await db.prepare("UPDATE payment_transactions SET status = ? WHERE provider_reference_id = ? AND type = 'hold'").run(result.status, result.referenceId);
+  } else {
+    await insertTransaction({
+      milestoneId: milestone.id,
+      type: 'hold',
+      provider: provider.name,
+      providerReferenceId: result.referenceId,
+      amount: milestone.amount,
+      status: result.status,
+    });
+  }
 
   if (result.status !== 'succeeded') {
     // Asynchronous provider — the charge/hold was created but isn't confirmed yet; the
