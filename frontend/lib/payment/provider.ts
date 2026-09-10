@@ -1,10 +1,13 @@
 // Payment provider abstraction for the Milestone Payment (escrow) system.
 //
-// The real gateway (Omise / Xendit / etc.) has not been chosen yet — that
-// decision is explicitly out of scope for this round. Everything in the app
-// talks to a `PaymentProvider` through this interface only, so swapping the
-// mock implementation for a real one later means writing one new file that
-// implements this interface; no business logic elsewhere needs to change.
+// Omise (Opn Payments) was chosen as the real gateway, integrated via its Recipient API only
+// (platform holds funds in its own Omise balance, pays installers out via Transfer — see
+// lib/payment/omise-provider.ts). Account Chaining (per-installer sub-merchant) is a reserved
+// future option, not implemented. Everything in the app talks to a `PaymentProvider` through
+// this interface only, so business logic elsewhere never needs to know which concrete
+// provider is active.
+
+import { getOmiseConfig, activeOmiseSecretKey, OmisePaymentProvider } from './omise-provider';
 
 export interface PaymentHoldParams {
   amount: number;
@@ -26,8 +29,18 @@ export interface PaymentRefundParams {
 
 export interface PaymentActionResult {
   success: boolean;
+  /**
+   * Where this action actually stands. Synchronous providers (the mock, and Omise refunds)
+   * always resolve 'succeeded' immediately. Asynchronous providers (Omise charges/transfers)
+   * resolve 'pending' — the real outcome only arrives later via the provider's webhook, which
+   * is responsible for reconciling payment_transactions.status and advancing the milestone
+   * state machine from there. 'failed' means the provider rejected the action outright.
+   */
+  status: 'succeeded' | 'pending' | 'failed';
   /** Provider-side reference id for this action (hold/release/refund), stored in payment_transactions.provider_reference_id for reconciliation. */
   referenceId: string;
+  /** Set only for actions that need the payer to complete a step out-of-band (e.g. Omise PromptPay's QR/authorize URL for createHold). Absent for synchronous actions. */
+  nextActionUrl?: string;
 }
 
 export interface PaymentProvider {
@@ -56,26 +69,36 @@ export class MockPaymentProvider implements PaymentProvider {
   async createHold({ amount, projectId, milestoneId }: PaymentHoldParams): Promise<PaymentActionResult> {
     const referenceId = `MOCK-HOLD-${projectId}-${milestoneId}-${Date.now()}`;
     console.log(`[MockPaymentProvider] createHold: project=${projectId} milestone=${milestoneId} amount=${amount} -> ${referenceId}`);
-    return { success: true, referenceId };
+    return { success: true, status: 'succeeded', referenceId };
   }
 
   async releaseHold({ holdReferenceId, amount, milestoneId }: PaymentReleaseParams): Promise<PaymentActionResult> {
     const referenceId = `MOCK-RELEASE-${milestoneId}-${Date.now()}`;
     console.log(`[MockPaymentProvider] releaseHold: milestone=${milestoneId} amount=${amount} hold=${holdReferenceId} -> ${referenceId}`);
-    return { success: true, referenceId };
+    return { success: true, status: 'succeeded', referenceId };
   }
 
   async refundHold({ holdReferenceId, amount, milestoneId }: PaymentRefundParams): Promise<PaymentActionResult> {
     const referenceId = `MOCK-REFUND-${milestoneId}-${Date.now()}`;
     console.log(`[MockPaymentProvider] refundHold: milestone=${milestoneId} amount=${amount} hold=${holdReferenceId} -> ${referenceId}`);
-    return { success: true, referenceId };
+    return { success: true, status: 'succeeded', referenceId };
   }
 }
 
-let providerInstance: PaymentProvider | null = null;
+let mockProviderInstance: PaymentProvider | null = null;
 
-/** Returns the active payment provider. Swap the implementation here once a real gateway is chosen. */
-export function getPaymentProvider(): PaymentProvider {
-  if (!providerInstance) providerInstance = new MockPaymentProvider();
-  return providerInstance;
+/**
+ * Returns the active payment provider. Resolves to `OmisePaymentProvider` once a secret key is
+ * saved for the active mode (test/live) in Admin → ตั้งค่า → Gateway; falls back to the mock
+ * otherwise, so every existing mock-based flow keeps working untouched until Omise is actually
+ * configured. Config is read fresh from `site_content` each call (same lookup-every-time
+ * convention as `getLineConfig()`) rather than cached, so a settings change takes effect
+ * immediately without a restart.
+ */
+export async function getPaymentProvider(): Promise<PaymentProvider> {
+  const cfg = await getOmiseConfig();
+  if (activeOmiseSecretKey(cfg)) return new OmisePaymentProvider();
+
+  if (!mockProviderInstance) mockProviderInstance = new MockPaymentProvider();
+  return mockProviderInstance;
 }

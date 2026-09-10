@@ -27,11 +27,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .prepare("SELECT provider_reference_id FROM payment_transactions WHERE milestone_id = ? AND type = 'hold' ORDER BY created_at DESC LIMIT 1")
     .get(milestone.id)) as { provider_reference_id: string | null } | undefined;
 
-  const provider = getPaymentProvider();
+  const provider = await getPaymentProvider();
   const result = await provider.releaseHold({ holdReferenceId: hold?.provider_reference_id || '', amount: milestone.amount, milestoneId: milestone.id });
   if (!result.success) return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ กรุณาลองใหม่' }, { status: 502 });
 
-  await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount });
+  await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount, status: result.status });
+
+  if (result.status !== 'succeeded') {
+    // Asynchronous provider (e.g. Omise Transfer) — the payout was initiated but not yet
+    // confirmed paid. Milestone stays as-is; the transfer.paid/transfer.fail webhook (see
+    // app/api/webhooks/omise/route.ts) is what actually flips it to 'released' (and creates
+    // the affiliate commission), or leaves it unreleased with a logged failure.
+    return NextResponse.json({ success: true, pending: true, message: 'ยืนยันงานเสร็จแล้ว กำลังโอนเงินให้ผู้ติดตั้ง ระบบจะอัปเดตสถานะเมื่อโอนสำเร็จ', milestoneId: milestone.id });
+  }
+
   await db
     .prepare("UPDATE payment_milestones SET status = 'released', released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(milestone.id);

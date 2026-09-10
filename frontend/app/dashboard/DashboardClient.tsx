@@ -72,6 +72,9 @@ export default function DashboardClient({
     affiliate_enabled: !!installer.affiliate_enabled,
     affiliate_commission_type: (installer.affiliate_commission_type === 'flat' ? 'flat' : 'percent') as 'percent' | 'flat',
     affiliate_commission_value: installer.affiliate_commission_value ?? 0,
+    payout_bank_name: installer.payout_bank_name || '',
+    payout_account_number: installer.payout_account_number || '',
+    payout_account_name: installer.payout_account_name || '',
   });
   const [locationInput, setLocationInput] = useState('');
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -772,6 +775,52 @@ export default function DashboardClient({
                     </div>
                     <p className="text-xs text-[var(--color-muted)] mt-1">ใช้อีเมลนี้เพื่อเข้าสู่ระบบ ไม่สามารถแก้ไขได้</p>
                   </div>
+                </div>
+                <div className="divider" />
+
+                {/* Payout bank account — used to pay out milestone releases via the payment gateway */}
+                <div className="mb-6">
+                  <h2 className="font-bold text-base mb-1">🏦 บัญชีสำหรับรับเงิน (ผ่อนชำระตามงวด)</h2>
+                  <p className="text-xs text-[var(--color-muted)] mb-4">
+                    เมื่อลูกค้ายืนยันงวดงานเสร็จ ระบบจะโอนเงินเข้าบัญชีนี้ให้อัตโนมัติผ่านผู้ให้บริการชำระเงิน — กรุณากรอกให้ครบและถูกต้องก่อนเริ่มรับงานแบบผ่อนชำระ
+                  </p>
+                  <form onSubmit={saveProfile} className="space-y-4 max-w-md">
+                    <div className="form-group">
+                      <label className="form-label">ธนาคาร</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="เช่น ธนาคารกสิกรไทย"
+                        value={profileForm.payout_bank_name}
+                        onChange={(e) => setProfileForm((f) => ({ ...f, payout_bank_name: e.target.value }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="form-group">
+                        <label className="form-label">เลขที่บัญชี</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="XXX-X-XXXXX-X"
+                          value={profileForm.payout_account_number}
+                          onChange={(e) => setProfileForm((f) => ({ ...f, payout_account_number: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">ชื่อบัญชี</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="ชื่อ-นามสกุลหรือชื่อบริษัทตามบัญชีธนาคาร"
+                          value={profileForm.payout_account_name}
+                          onChange={(e) => setProfileForm((f) => ({ ...f, payout_account_name: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                      {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลบัญชี'}
+                    </button>
+                  </form>
                 </div>
                 <div className="divider" />
 

@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
            experience, contact_email, line_id, response_time, warranty_panel, warranty_inverter, warranty_workmanship,
            services, certifications, profile_views, lat, lng, service_provinces,
            youtube_url, tiktok_url, facebook_url, website_url,
-           affiliate_enabled, affiliate_commission_type, affiliate_commission_value
+           affiliate_enabled, affiliate_commission_type, affiliate_commission_value,
+           payout_bank_name, payout_account_number, payout_account_name
     FROM installers WHERE id = ?
   `).get(session.id)) as Record<string, unknown> | undefined;
 
@@ -41,6 +42,7 @@ export async function PUT(req: NextRequest) {
     lat, lng, service_provinces,
     youtube_url, tiktok_url, facebook_url, website_url,
     affiliate_enabled, affiliate_commission_type, affiliate_commission_value,
+    payout_bank_name, payout_account_number, payout_account_name,
   } = body;
 
   if (!name || stripTags(name).length < 2)
@@ -81,7 +83,8 @@ export async function PUT(req: NextRequest) {
       services=?, certifications=?,
       lat=?, lng=?, service_provinces=?,
       youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?,
-      affiliate_enabled=?, affiliate_commission_type=?, affiliate_commission_value=?
+      affiliate_enabled=?, affiliate_commission_type=?, affiliate_commission_value=?,
+      payout_bank_name=?, payout_account_number=?, payout_account_name=?
     WHERE id=?
   `).run(
     stripTags(name),
@@ -103,6 +106,9 @@ export async function PUT(req: NextRequest) {
     facebook_url ? String(facebook_url).trim() : null,
     website_url  ? String(website_url).trim()  : null,
     affiliateEnabled, affiliateCommissionType, affiliateCommissionValue,
+    payout_bank_name ? stripTags(String(payout_bank_name)) : null,
+    payout_account_number ? stripTags(String(payout_account_number)) : null,
+    payout_account_name ? stripTags(String(payout_account_name)) : null,
     session.id
   );
 

@@ -12,9 +12,9 @@ import { notifyPaymentReceived } from '@/lib/payment/notify';
 
 export const dynamic = 'force-dynamic';
 
-// POST: customer pays the milestone at the front of the queue. Mock provider only (real gateway
-// integration is a separate, later decision) — calls the same MockPaymentProvider.createHold()
-// round 1's admin-only manual-pay action already exercises.
+// POST: customer pays the milestone at the front of the queue, via whichever provider
+// getPaymentProvider() resolves to (mock, or Omise once configured) — calls the same
+// createHold() round 1's admin-only manual-pay action already exercises.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string; milestoneId: string }> }) {
   const { token, milestoneId } = await params;
   const project = await getProjectByToken(token);
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!(await isMilestoneUnblocked(milestone)))
     return NextResponse.json({ success: false, message: 'งวดก่อนหน้ายังไม่ถูกปล่อยเงิน จึงยังชำระงวดนี้ไม่ได้' }, { status: 400 });
 
-  const provider = getPaymentProvider();
+  const provider = await getPaymentProvider();
   const result = await provider.createHold({ amount: milestone.amount, projectId: project.id, milestoneId: milestone.id });
   if (!result.success) return NextResponse.json({ success: false, message: 'การชำระเงินไม่สำเร็จ กรุณาลองใหม่' }, { status: 502 });
 
@@ -45,11 +45,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     provider: provider.name,
     providerReferenceId: result.referenceId,
     amount: milestone.amount,
+    status: result.status,
   });
-  await db.prepare("UPDATE payment_milestones SET status = 'paid_hold', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(milestone.id);
-  await recomputeProjectStatus(project.id);
 
-  notifyPaymentReceived(project, { ...milestone, status: 'paid_hold' }).catch(() => {}); // fire-and-forget, see resolve/route.ts
+  // Synchronous provider (mock) — hold is in effect immediately.
+  if (result.status === 'succeeded') {
+    await db.prepare("UPDATE payment_milestones SET status = 'paid_hold', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(milestone.id);
+    await recomputeProjectStatus(project.id);
+    notifyPaymentReceived(project, { ...milestone, status: 'paid_hold' }).catch(() => {}); // fire-and-forget, see resolve/route.ts
+    return NextResponse.json({ success: true, message: 'ชำระเงินสำเร็จ เงินถูกพักไว้ในระบบจนกว่างานจะเสร็จ', milestoneId: milestone.id });
+  }
 
-  return NextResponse.json({ success: true, message: 'ชำระเงินสำเร็จ เงินถูกพักไว้ในระบบจนกว่างานจะเสร็จ', milestoneId: milestone.id });
+  // Asynchronous provider (e.g. Omise PromptPay) — the charge was created but the customer
+  // still needs to complete payment out-of-band (scan the QR at nextActionUrl). The milestone
+  // stays 'pending_payment' until the charge.complete webhook confirms it (see
+  // app/api/webhooks/omise/route.ts), which is what actually flips it to 'paid_hold'.
+  return NextResponse.json({
+    success: true,
+    pending: true,
+    message: 'สร้างรายการชำระเงินแล้ว กรุณาชำระเงินให้เสร็จสิ้นตามช่องทางที่ระบุ',
+    milestoneId: milestone.id,
+    nextActionUrl: result.nextActionUrl || null,
+  });
 }

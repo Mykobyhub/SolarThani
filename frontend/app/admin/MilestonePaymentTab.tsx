@@ -416,7 +416,21 @@ export default function MilestonePaymentTab({
                             </span>
                           </td>
                           <td className="px-4 py-3 font-medium">{THB(t.amount)}</td>
-                          <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{t.provider_reference_id}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span
+                              className="tbadge"
+                              style={
+                                t.status === 'succeeded'
+                                  ? { background: '#d1fae5', color: '#065f46' }
+                                  : t.status === 'failed'
+                                  ? { background: '#fee2e2', color: '#991b1b' }
+                                  : { background: '#fef3c7', color: '#92400e' }
+                              }
+                            >
+                              {t.status === 'succeeded' ? 'สำเร็จ' : t.status === 'failed' ? 'ไม่สำเร็จ' : 'รอยืนยัน'}
+                            </span>
+                            <div className="text-[var(--color-muted)] mt-0.5" title={t.provider_reference_id || ''}>{t.provider_reference_id}</div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

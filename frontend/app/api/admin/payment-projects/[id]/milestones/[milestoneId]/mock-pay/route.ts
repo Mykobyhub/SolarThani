@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!(await isMilestoneUnblocked(milestone)))
     return NextResponse.json({ success: false, message: 'งวดก่อนหน้ายังไม่ถูกปล่อยเงิน จึงยังชำระงวดนี้ไม่ได้' }, { status: 400 });
 
-  const provider = getPaymentProvider();
+  const provider = await getPaymentProvider();
   const result = await provider.createHold({ amount: milestone.amount, projectId: Number(id), milestoneId: milestone.id });
   if (!result.success) return NextResponse.json({ success: false, message: 'การชำระเงินไม่สำเร็จ' }, { status: 502 });
 
@@ -39,7 +39,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     provider: provider.name,
     providerReferenceId: result.referenceId,
     amount: milestone.amount,
+    status: result.status,
   });
+
+  if (result.status !== 'succeeded') {
+    // Asynchronous provider — the charge/hold was created but isn't confirmed yet; the
+    // webhook (app/api/webhooks/omise/route.ts) flips the milestone forward once it is.
+    return NextResponse.json({ success: true, pending: true, message: `สร้างรายการชำระเงินแล้ว รอการยืนยัน (ref: ${result.referenceId})` });
+  }
+
   await db.prepare("UPDATE payment_milestones SET status = 'paid_hold', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(milestone.id);
   await recomputeProjectStatus(Number(id));
 

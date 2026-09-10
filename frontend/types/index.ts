@@ -50,6 +50,10 @@ export interface Installer {
   affiliate_enabled: number;
   affiliate_commission_type: 'percent' | 'flat' | null;
   affiliate_commission_value: number;
+  payout_bank_name: string | null;
+  payout_account_number: string | null;
+  payout_account_name: string | null;
+  omise_recipient_id: string | null;
 }
 
 export type InstallerPublic = Omit<Installer, 'password_hash' | 'oauth_id'>;

@@ -450,3 +450,33 @@ CREATE INDEX idx_affiliate_commissions_affiliate ON affiliate_commissions(affili
 CREATE INDEX idx_affiliate_commissions_installer ON affiliate_commissions(installer_id);
 CREATE INDEX idx_affiliate_commissions_milestone ON affiliate_commissions(milestone_id);
 CREATE INDEX idx_affiliates_referral_code         ON affiliates(referral_code);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Omise (Opn Payments) Recipient-API integration for the Milestone Payment
+-- (escrow) system. The platform holds funds in its own Omise balance
+-- (Charges) and pays installers out itself (Transfers to an Omise
+-- Recipient) — Account Chaining (per-installer sub-merchant) is a reserved
+-- future option (site_content key 'omise_integration_mode'), not
+-- implemented. Gateway credentials/mode live in site_content (never
+-- process.env), same convention as the LINE OA settings above — see
+-- lib/payment/omise-provider.ts's getOmiseConfig().
+-- See scripts/migrate-omise-payment.mjs for the idempotent migration
+-- applied against the already-live Neon DB.
+-- ─────────────────────────────────────────────────────────────────────────
+
+-- 'pending' is a new payment_transactions status: Omise charges/transfers are asynchronous
+-- (unlike the synchronous mock provider, which only ever writes 'succeeded'/'failed') — a row
+-- is inserted 'pending' the moment the charge/transfer is created, then reconciled to
+-- 'succeeded'/'failed' by app/api/webhooks/omise/route.ts once Omise confirms the outcome.
+ALTER TABLE payment_transactions DROP CONSTRAINT payment_transactions_status_check;
+ALTER TABLE payment_transactions ADD CONSTRAINT payment_transactions_status_check
+  CHECK (status IN ('succeeded','pending','failed'));
+
+-- installers: payout bank details, same 3 column names/shape as affiliates' manual-payout
+-- fields above (reused deliberately, not duplicated under a new naming scheme) — releaseHold()
+-- reads these to create the installer's Omise Recipient (once) the first time they're paid.
+-- omise_recipient_id caches that Recipient's id so it's only ever created once per installer.
+ALTER TABLE installers ADD COLUMN payout_bank_name TEXT;
+ALTER TABLE installers ADD COLUMN payout_account_number TEXT;
+ALTER TABLE installers ADD COLUMN payout_account_name TEXT;
+ALTER TABLE installers ADD COLUMN omise_recipient_id TEXT;

@@ -40,7 +40,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .prepare("SELECT * FROM payment_transactions WHERE milestone_id = ? AND type = 'hold' ORDER BY created_at DESC LIMIT 1")
     .get(milestone.id)) as { provider_reference_id: string | null } | undefined;
 
-  const provider = getPaymentProvider();
+  const provider = await getPaymentProvider();
+
+  // Set for the release branch only, to (a) skip marking the milestone 'released' /
+  // creating the affiliate commission until the payout is actually confirmed, and (b) tailor
+  // the final response message — the mock always resolves 'succeeded' synchronously, so
+  // behavior for the mock is unchanged from before this field existed.
+  let releaseStatus: 'succeeded' | 'pending' | 'failed' | null = null;
 
   if (action === 'release') {
     const result = await provider.releaseHold({
@@ -49,20 +55,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       milestoneId: milestone.id,
     });
     if (!result.success) return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ' }, { status: 502 });
-    await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount });
-    await db
-      .prepare("UPDATE payment_milestones SET status = 'released', released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .run(milestone.id);
+    await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount, status: result.status });
+    releaseStatus = result.status;
+
+    // The admin's decision is recorded immediately either way; the milestone's own status
+    // (released / affiliate commission) only advances once the payout is actually confirmed —
+    // synchronously here for the mock, or later via the transfer.paid webhook for Omise.
     await db
       .prepare("UPDATE payment_disputes SET status = 'resolved_release', admin_resolution = ?, resolved_by_admin_id = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(resolution, session.id, id);
 
-    // Affiliate commission creation — money-adjacent ledger write, always awaited
-    // inline (never fire-and-forget like the notify call below).
-    try {
-      await createCommissionsForReleasedMilestone(milestone.id);
-    } catch (err) {
-      console.error('createCommissionsForReleasedMilestone failed', milestone.id, err);
+    if (result.status === 'succeeded') {
+      await db
+        .prepare("UPDATE payment_milestones SET status = 'released', released_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        .run(milestone.id);
+
+      // Affiliate commission creation — money-adjacent ledger write, always awaited
+      // inline (never fire-and-forget like the notify call below).
+      try {
+        await createCommissionsForReleasedMilestone(milestone.id);
+      } catch (err) {
+        console.error('createCommissionsForReleasedMilestone failed', milestone.id, err);
+      }
     }
   } else {
     const result = await provider.refundHold({
@@ -95,5 +109,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // notifications must never block this response on slow/unreachable SMTP or LINE.
   if (project) notifyDisputeResolved(project, milestone, action).catch(() => {});
 
-  return NextResponse.json({ success: true, message: action === 'release' ? 'ปล่อยเงินให้ผู้ติดตั้งแล้ว' : 'คืนเงินให้ลูกค้าแล้ว' });
+  const releaseMessage = releaseStatus === 'succeeded' ? 'ปล่อยเงินให้ผู้ติดตั้งแล้ว' : 'บันทึกการตัดสินแล้ว กำลังโอนเงินให้ผู้ติดตั้ง ระบบจะอัปเดตสถานะเมื่อโอนสำเร็จ';
+  return NextResponse.json({ success: true, message: action === 'release' ? releaseMessage : 'คืนเงินให้ลูกค้าแล้ว' });
 }

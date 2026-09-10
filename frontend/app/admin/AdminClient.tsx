@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import MilestonePaymentTab from './MilestonePaymentTab';
 import LineSettingsTab from './LineSettingsTab';
 import AffiliateTab from './AffiliateTab';
+import GatewaySettingsTab from './GatewaySettingsTab';
 
-type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings' | 'oauth' | 'milestones' | 'line' | 'affiliate';
+type Tab = 'overview' | 'installers' | 'reviews' | 'leads' | 'blogs' | 'messages' | 'content' | 'terms' | 'settings' | 'oauth' | 'milestones' | 'line' | 'affiliate' | 'gateway';
 
-const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings', 'oauth', 'milestones', 'line', 'affiliate'];
+const TAB_KEYS: Tab[] = ['overview', 'installers', 'reviews', 'leads', 'blogs', 'messages', 'content', 'terms', 'settings', 'oauth', 'milestones', 'line', 'affiliate', 'gateway'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function AdminClient({ data }: { data: Record<string, any> }) {
@@ -91,6 +92,7 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
     { key: 'milestones',  icon: '💳', label: 'ผ่อนชำระ', badge: data.stats.openDisputes },
     { key: 'line',        icon: '📱', label: 'LINE OA' },
     { key: 'affiliate',   icon: '🤝', label: 'Affiliate' },
+    { key: 'gateway',     icon: '💳', label: 'Gateway' },
   ];
 
   const filteredInstallers = (data.installers as Record<string, unknown>[]).filter((inst) => {
@@ -523,6 +525,11 @@ export default function AdminClient({ data }: { data: Record<string, any> }) {
             {/* ── Affiliate / Referral Program ── */}
             {activeTab === 'affiliate' && (
               <AffiliateTab showAlert={showAlert} />
+            )}
+
+            {/* ── Payment Gateway (Omise) Settings ── */}
+            {activeTab === 'gateway' && (
+              <GatewaySettingsTab showAlert={showAlert} />
             )}
           </main>
         </div>

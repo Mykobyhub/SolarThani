@@ -138,7 +138,7 @@ export async function insertTransaction(opts: {
   provider: string;
   providerReferenceId: string;
   amount: number;
-  status?: 'succeeded' | 'failed';
+  status?: 'succeeded' | 'pending' | 'failed';
 }): Promise<void> {
   await db
     .prepare(
@@ -175,7 +175,7 @@ export interface CancelProjectResult {
  */
 export async function cancelProject(projectId: number, requestedBy: 'customer' | 'installer' | 'admin'): Promise<CancelProjectResult> {
   const milestones = (await db.prepare('SELECT * FROM payment_milestones WHERE project_id = ? ORDER BY seq').all(projectId)) as PaymentMilestoneRow[];
-  const provider = getPaymentProvider();
+  const provider = await getPaymentProvider();
 
   const cancelledMilestoneIds: number[] = [];
   const refundedMilestoneIds: number[] = [];
