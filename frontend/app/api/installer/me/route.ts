@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
            services, certifications, profile_views, lat, lng, service_provinces,
            youtube_url, tiktok_url, facebook_url, website_url,
            affiliate_enabled, affiliate_commission_type, affiliate_commission_value,
-           payout_bank_name, payout_account_number, payout_account_name
+           payout_bank_name, payout_account_number, payout_account_name,
+           payout_recipient_type, payout_tax_id
     FROM installers WHERE id = ?
   `).get(session.id)) as Record<string, unknown> | undefined;
 
@@ -43,6 +44,7 @@ export async function PUT(req: NextRequest) {
     youtube_url, tiktok_url, facebook_url, website_url,
     affiliate_enabled, affiliate_commission_type, affiliate_commission_value,
     payout_bank_name, payout_account_number, payout_account_name,
+    payout_recipient_type, payout_tax_id,
   } = body;
 
   if (!name || stripTags(name).length < 2)
@@ -68,6 +70,10 @@ export async function PUT(req: NextRequest) {
     }
   }
 
+  // Omise Recipient type for installer payouts — validated server-side too, defensive default
+  // matches affiliate_commission_type's pattern above (never trust the client-side value alone).
+  const payoutRecipientType = payout_recipient_type === 'corporation' ? 'corporation' : 'individual';
+
   const svcJson  = Array.isArray(services)          ? JSON.stringify(services.map((s: unknown) => stripTags(String(s))).filter(Boolean))          : null;
   const certJson = Array.isArray(certifications)    ? JSON.stringify(certifications.map((c: unknown) => stripTags(String(c))).filter(Boolean))    : null;
   const spJson   = Array.isArray(service_provinces) ? JSON.stringify(service_provinces.map((p: unknown) => stripTags(String(p))).filter(Boolean)) : null;
@@ -84,7 +90,8 @@ export async function PUT(req: NextRequest) {
       lat=?, lng=?, service_provinces=?,
       youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?,
       affiliate_enabled=?, affiliate_commission_type=?, affiliate_commission_value=?,
-      payout_bank_name=?, payout_account_number=?, payout_account_name=?
+      payout_bank_name=?, payout_account_number=?, payout_account_name=?,
+      payout_recipient_type=?, payout_tax_id=?
     WHERE id=?
   `).run(
     stripTags(name),
@@ -109,6 +116,8 @@ export async function PUT(req: NextRequest) {
     payout_bank_name ? stripTags(String(payout_bank_name)) : null,
     payout_account_number ? stripTags(String(payout_account_number)) : null,
     payout_account_name ? stripTags(String(payout_account_name)) : null,
+    payoutRecipientType,
+    payout_tax_id ? stripTags(String(payout_tax_id)) : null,
     session.id
   );
 

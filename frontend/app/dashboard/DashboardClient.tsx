@@ -8,6 +8,7 @@ import type { Installer, Lead } from '@/types';
 import PaymentProjectsTab from './PaymentProjectsTab';
 import SubcontractorsTab from './SubcontractorsTab';
 import { COMMISSION_PERCENT_MIN, COMMISSION_PERCENT_MAX, COMMISSION_FLAT_MIN, COMMISSION_FLAT_MAX } from '@/lib/affiliate/constants';
+import { THAI_BANKS } from '@/lib/payment/thai-banks';
 
 const THAI_PROVINCES = [
   'กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','ขอนแก่น',
@@ -75,6 +76,8 @@ export default function DashboardClient({
     payout_bank_name: installer.payout_bank_name || '',
     payout_account_number: installer.payout_account_number || '',
     payout_account_name: installer.payout_account_name || '',
+    payout_recipient_type: (installer.payout_recipient_type === 'corporation' ? 'corporation' : 'individual') as 'individual' | 'corporation',
+    payout_tax_id: installer.payout_tax_id || '',
   });
   const [locationInput, setLocationInput] = useState('');
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -787,13 +790,16 @@ export default function DashboardClient({
                   <form onSubmit={saveProfile} className="space-y-4 max-w-md">
                     <div className="form-group">
                       <label className="form-label">ธนาคาร</label>
-                      <input
-                        type="text"
+                      <select
                         className="form-input"
-                        placeholder="เช่น ธนาคารกสิกรไทย"
                         value={profileForm.payout_bank_name}
                         onChange={(e) => setProfileForm((f) => ({ ...f, payout_bank_name: e.target.value }))}
-                      />
+                      >
+                        <option value="">เลือกธนาคาร</option>
+                        {THAI_BANKS.map((b) => (
+                          <option key={b.code} value={b.code}>{b.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="form-group">
@@ -817,6 +823,41 @@ export default function DashboardClient({
                         />
                       </div>
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">ประเภทผู้รับเงิน</label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="radio"
+                            name="payout_recipient_type"
+                            checked={profileForm.payout_recipient_type === 'individual'}
+                            onChange={() => setProfileForm((f) => ({ ...f, payout_recipient_type: 'individual' }))}
+                          />
+                          บุคคลธรรมดา
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="radio"
+                            name="payout_recipient_type"
+                            checked={profileForm.payout_recipient_type === 'corporation'}
+                            onChange={() => setProfileForm((f) => ({ ...f, payout_recipient_type: 'corporation' }))}
+                          />
+                          นิติบุคคล
+                        </label>
+                      </div>
+                    </div>
+                    {profileForm.payout_recipient_type === 'corporation' && (
+                      <div className="form-group">
+                        <label className="form-label">เลขประจำตัวผู้เสียภาษี (ไม่บังคับ)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="เลขประจำตัวผู้เสียภาษี 13 หลัก"
+                          value={profileForm.payout_tax_id}
+                          onChange={(e) => setProfileForm((f) => ({ ...f, payout_tax_id: e.target.value }))}
+                        />
+                      </div>
+                    )}
                     <button type="submit" className="btn btn-primary" disabled={saving}>
                       {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลบัญชี'}
                     </button>

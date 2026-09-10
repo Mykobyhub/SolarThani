@@ -480,3 +480,10 @@ ALTER TABLE installers ADD COLUMN payout_bank_name TEXT;
 ALTER TABLE installers ADD COLUMN payout_account_number TEXT;
 ALTER TABLE installers ADD COLUMN payout_account_name TEXT;
 ALTER TABLE installers ADD COLUMN omise_recipient_id TEXT;
+
+-- Round 2: lets an installer choose an Omise Recipient 'type' of 'corporation' instead of always
+-- 'individual', with an optional tax id either way (per docs.omise.co/recipients-api). See
+-- scripts/migrate-omise-payment-round2.mjs for the idempotent migration applied against the
+-- already-live Neon DB.
+ALTER TABLE installers ADD COLUMN payout_recipient_type TEXT DEFAULT 'individual';
+ALTER TABLE installers ADD COLUMN payout_tax_id TEXT;

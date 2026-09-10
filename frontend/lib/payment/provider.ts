@@ -41,6 +41,13 @@ export interface PaymentActionResult {
   referenceId: string;
   /** Set only for actions that need the payer to complete a step out-of-band (e.g. Omise PromptPay's QR/authorize URL for createHold). Absent for synchronous actions. */
   nextActionUrl?: string;
+  /**
+   * Set when createHold() found and re-used an already-pending charge for this milestone instead
+   * of creating a new one (e.g. the customer hit "retry" after the QR poll timed out, but hadn't
+   * actually let the original charge expire). Callers must not insert a second transactions row
+   * for the same charge when this is true — update the existing row's status instead.
+   */
+  reused?: boolean;
 }
 
 export interface PaymentProvider {

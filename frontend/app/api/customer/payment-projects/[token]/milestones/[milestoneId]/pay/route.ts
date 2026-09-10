@@ -39,14 +39,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const result = await provider.createHold({ amount: milestone.amount, projectId: project.id, milestoneId: milestone.id });
   if (!result.success) return NextResponse.json({ success: false, message: 'การชำระเงินไม่สำเร็จ กรุณาลองใหม่' }, { status: 502 });
 
-  await insertTransaction({
-    milestoneId: milestone.id,
-    type: 'hold',
-    provider: provider.name,
-    providerReferenceId: result.referenceId,
-    amount: milestone.amount,
-    status: result.status,
-  });
+  // result.reused means createHold() found and re-fetched an already-pending charge for this
+  // milestone (e.g. a "retry" after the QR poll timed out) instead of creating a new one — update
+  // that existing row rather than inserting a second transaction for the same underlying charge.
+  if (result.reused) {
+    await db.prepare("UPDATE payment_transactions SET status = ? WHERE provider_reference_id = ? AND type = 'hold'").run(result.status, result.referenceId);
+  } else {
+    await insertTransaction({
+      milestoneId: milestone.id,
+      type: 'hold',
+      provider: provider.name,
+      providerReferenceId: result.referenceId,
+      amount: milestone.amount,
+      status: result.status,
+    });
+  }
 
   // Synchronous provider (mock) — hold is in effect immediately.
   if (result.status === 'succeeded') {

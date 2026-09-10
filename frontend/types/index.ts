@@ -53,6 +53,8 @@ export interface Installer {
   payout_bank_name: string | null;
   payout_account_number: string | null;
   payout_account_name: string | null;
+  payout_recipient_type: 'individual' | 'corporation' | null;
+  payout_tax_id: string | null;
   omise_recipient_id: string | null;
 }
 

@@ -7,6 +7,7 @@
 
 import { db } from '@/lib/db';
 import type { PaymentActionResult, PaymentHoldParams, PaymentProvider, PaymentReleaseParams, PaymentRefundParams } from './provider';
+import { THAI_BANKS } from './thai-banks';
 
 const OMISE_API = 'https://api.omise.co';
 
@@ -67,12 +68,10 @@ function toSatang(amountThb: number): number {
 }
 
 /**
- * Best-effort mapping from the free-text Thai bank name installers type into their payout
- * fields (installers.payout_bank_name — same column/convention as affiliates' manual-payout
- * form) to the bank "brand" code Omise's Recipient API requires. This is a substring-match
- * heuristic covering the common Thai banks; an unmatched name falls through to a slugified
- * guess that Omise will most likely reject — flagged as a follow-up to replace this free-text
- * field with a proper bank dropdown before this goes anywhere near production.
+ * Legacy fallback for installers.payout_bank_name values saved before the dashboard switched to
+ * a proper bank dropdown (frontend/lib/payment/thai-banks.ts): a substring-match heuristic over
+ * the free text they used to be able to type. New saves go through the dropdown and are already
+ * exact Omise brand codes, so resolveOmiseBankBrand() only falls through to this for old rows.
  */
 const BANK_NAME_TO_OMISE_BRAND: { match: string; brand: string }[] = [
   { match: 'กสิกร', brand: 'kbank' },
@@ -100,8 +99,10 @@ const BANK_NAME_TO_OMISE_BRAND: { match: string; brand: string }[] = [
   { match: 'แลนด์แอนด์เฮ้าส์', brand: 'lhb' },
 ];
 
-function mapBankNameToOmiseBrand(bankName: string): string {
+function resolveOmiseBankBrand(bankName: string): string {
   const lower = bankName.toLowerCase();
+  // New saves via the dashboard's bank dropdown are already an exact Omise brand code.
+  if (THAI_BANKS.some((b) => b.code === lower)) return lower;
   for (const { match, brand } of BANK_NAME_TO_OMISE_BRAND) {
     if (lower.includes(match.toLowerCase())) return brand;
   }
@@ -114,13 +115,16 @@ interface InstallerPayoutRow {
   payout_bank_name: string | null;
   payout_account_number: string | null;
   payout_account_name: string | null;
+  payout_recipient_type: string | null;
+  payout_tax_id: string | null;
   omise_recipient_id: string | null;
 }
 
 async function getInstallerPayoutForMilestone(milestoneId: number): Promise<InstallerPayoutRow | undefined> {
   return (await db
     .prepare(
-      `SELECT p.installer_id, i.payout_bank_name, i.payout_account_number, i.payout_account_name, i.omise_recipient_id
+      `SELECT p.installer_id, i.payout_bank_name, i.payout_account_number, i.payout_account_name,
+              i.payout_recipient_type, i.payout_tax_id, i.omise_recipient_id
        FROM payment_milestones m
        JOIN payment_projects p ON p.id = m.project_id
        JOIN installers i ON i.id = p.installer_id
@@ -141,6 +145,34 @@ function mapTransferStatus(status: unknown): 'succeeded' | 'pending' | 'failed' 
   return 'pending';
 }
 
+/** Extracts the {status, nextActionUrl} pair out of an Omise charge object — used both when
+ * a charge is freshly created and when an existing pending one is re-fetched for reuse. */
+function extractChargeResult(body: Record<string, unknown>): { status: 'succeeded' | 'pending' | 'failed'; nextActionUrl?: string } {
+  const status = mapChargeStatus(body.status);
+  const source = body.source as Record<string, unknown> | undefined;
+  const scannableImage = (source?.scannable_code as Record<string, unknown> | undefined)?.image as Record<string, unknown> | undefined;
+  const nextActionUrl = (body.authorize_uri as string | undefined) || (scannableImage?.download_uri as string | undefined) || undefined;
+  return { status, nextActionUrl };
+}
+
+interface LatestHoldRow {
+  id: number;
+  provider_reference_id: string | null;
+  status: string;
+}
+
+/** Most recent Omise 'hold' transaction row for a milestone, if any — used to detect an
+ * already-pending charge before creating a second one for the same milestone. */
+async function getLatestOmiseHoldTransaction(milestoneId: number): Promise<LatestHoldRow | undefined> {
+  return (await db
+    .prepare(
+      `SELECT id, provider_reference_id, status FROM payment_transactions
+       WHERE milestone_id = ? AND type = 'hold' AND provider = 'omise'
+       ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(milestoneId)) as LatestHoldRow | undefined;
+}
+
 export class OmisePaymentProvider implements PaymentProvider {
   readonly name = 'omise';
 
@@ -156,9 +188,31 @@ export class OmisePaymentProvider implements PaymentProvider {
    * scans in their banking app — no card required, matches how most Thai customers pay).
    * Charges are asynchronous: the charge is created 'pending' and only becomes 'successful'
    * once the customer actually pays, reported later via the charge.complete webhook.
+   *
+   * Before creating a new charge, checks for an already-pending one on this milestone (e.g. the
+   * customer's QR poll timed out and they hit "retry" without the original charge actually
+   * expiring) and re-fetches it from Omise instead — this is what stops a retry from ever
+   * spawning a second live PromptPay QR for the same milestone, which would risk the customer
+   * scanning both and paying twice. Only falls through to creating a fresh charge once Omise
+   * itself reports the old one failed/expired.
    */
   async createHold({ amount, projectId, milestoneId }: PaymentHoldParams): Promise<PaymentActionResult> {
     const secretKey = await this.secretKey();
+
+    const existing = await getLatestOmiseHoldTransaction(milestoneId);
+    if (existing?.status === 'pending' && existing.provider_reference_id) {
+      const { ok, body } = await omiseFetch(`/charges/${existing.provider_reference_id}`, secretKey);
+      if (ok && body.id) {
+        const { status, nextActionUrl } = extractChargeResult(body);
+        if (status !== 'failed') {
+          return { success: true, status, referenceId: String(body.id), nextActionUrl, reused: true };
+        }
+        // Omise itself confirms the old charge expired/failed — mark it so and fall through
+        // to create a fresh one below.
+        await db.prepare("UPDATE payment_transactions SET status = 'failed' WHERE id = ?").run(existing.id);
+      }
+    }
+
     const { ok, body } = await omiseFetch('/charges', secretKey, {
       method: 'POST',
       body: JSON.stringify({
@@ -174,11 +228,7 @@ export class OmisePaymentProvider implements PaymentProvider {
       return { success: false, status: 'failed', referenceId: '' };
     }
 
-    const status = mapChargeStatus(body.status);
-    const source = body.source as Record<string, unknown> | undefined;
-    const scannableImage = (source?.scannable_code as Record<string, unknown> | undefined)?.image as Record<string, unknown> | undefined;
-    const nextActionUrl = (body.authorize_uri as string | undefined) || (scannableImage?.download_uri as string | undefined) || undefined;
-
+    const { status, nextActionUrl } = extractChargeResult(body);
     return { success: status !== 'failed', status, referenceId: String(body.id), nextActionUrl };
   }
 
@@ -206,9 +256,10 @@ export class OmisePaymentProvider implements PaymentProvider {
         method: 'POST',
         body: JSON.stringify({
           name: payout.payout_account_name,
-          type: 'individual',
+          type: payout.payout_recipient_type === 'corporation' ? 'corporation' : 'individual',
+          ...(payout.payout_tax_id ? { tax_id: payout.payout_tax_id } : {}),
           bank_account: {
-            brand: mapBankNameToOmiseBrand(payout.payout_bank_name),
+            brand: resolveOmiseBankBrand(payout.payout_bank_name),
             number: payout.payout_account_number,
             name: payout.payout_account_name,
           },
