@@ -224,11 +224,7 @@ export default async function InstallerDetailPage({ params }: Props) {
               <h1 className="text-2xl md:text-3xl font-bold mb-3" style={{ color: '#ffffff' }}>{inst.name}</h1>
               {/* Trust badges */}
               <div className="flex flex-wrap gap-2 mb-3">
-                {inst.verified_at ? (
-                  <span className="tbadge green">✓ ตรวจสอบแล้ว</span>
-                ) : (
-                  <span className="tbadge gray">○ ยังไม่ตรวจสอบ</span>
-                )}
+                {inst.verified_at && <span className="tbadge green">✓ ตรวจสอบแล้ว</span>}
                 <span className="tbadge amber">⭐ {inst.experience}+ ปีประสบการณ์</span>
                 <span className="tbadge blue">📜 ISO Certified</span>
                 <span className="tbadge blue">🛡️ มีประกันงาน</span>

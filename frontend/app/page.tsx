@@ -302,13 +302,9 @@ export default async function HomePage() {
                 <div className="inst-card-body">
                   {/* top section — flex-col gap replaces per-element margins */}
                   <div className="flex-1 flex flex-col gap-2.5">
-                    {inst.verified_at ? (
+                    {inst.verified_at && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 self-start">
                         ✓ ตรวจสอบแล้ว
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-0.5 self-start">
-                        ○ ยังไม่ตรวจสอบ
                       </span>
                     )}
                     <h3 className="font-bold text-[15px] leading-snug line-clamp-2 text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
