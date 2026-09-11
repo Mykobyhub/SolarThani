@@ -226,8 +226,7 @@ export default async function InstallerDetailPage({ params }: Props) {
               <div className="flex flex-wrap gap-2 mb-3">
                 {inst.verified_at && <span className="tbadge green">✓ ตรวจสอบแล้ว</span>}
                 <span className="tbadge amber">⭐ {inst.experience}+ ปีประสบการณ์</span>
-                <span className="tbadge blue">📜 ISO Certified</span>
-                <span className="tbadge blue">🛡️ มีประกันงาน</span>
+                {certifications.some((c) => /iso/i.test(c)) && <span className="tbadge blue">📜 ISO Certified</span>}
                 {inst.founded_year && <span className="tbadge blue">ก่อตั้ง {inst.founded_year}</span>}
               </div>
               {/* Stars */}
