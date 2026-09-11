@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { db } from '@/lib/db';
 import AffiliateSignupForm from './AffiliateSignupForm';
 
 export const metadata: Metadata = {
@@ -7,6 +8,24 @@ export const metadata: Metadata = {
   description:
     'เข้าร่วมโปรแกรม Affiliate ของ Solar Thani แชร์ลิงก์แนะนำผู้ติดตั้งโซลาร์เซลล์ที่ผ่านการตรวจสอบ รับค่าคอมมิชชันเมื่อลูกค้าปิดงานจริง',
 };
+
+export const revalidate = 300;
+
+async function getHeroData() {
+  try {
+    const rows = (await db
+      .prepare("SELECT key, value FROM site_content WHERE key IN ('affiliate_header_image','affiliate_header_pos','affiliate_header_size')")
+      .all()) as { key: string; value: string }[];
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    return {
+      image: map['affiliate_header_image'] || null,
+      pos: map['affiliate_header_pos'] || 'center',
+      size: map['affiliate_header_size'] || 'cover',
+    };
+  } catch {
+    return { image: null, pos: 'center', size: 'cover' };
+  }
+}
 
 const STEPS = [
   {
@@ -50,21 +69,32 @@ const FAQS = [
   },
 ];
 
-export default function AffiliatePage() {
+export default async function AffiliatePage() {
+  const hero = await getHeroData();
   return (
     <>
       {/* Hero */}
       <div
         className="text-white py-20 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-primary) 100%)' }}
+        style={{
+          background: 'linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-primary) 100%)',
+          ...(hero.image ? {
+            backgroundImage: `url(${hero.image})`,
+            backgroundSize: hero.size,
+            backgroundPosition: hero.pos,
+          } : {}),
+        }}
       >
-        <span
-          aria-hidden
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-[14rem] leading-none pointer-events-none select-none"
-          style={{ opacity: 0.07 }}
-        >
-          🤝
-        </span>
+        {hero.image && <div aria-hidden className="absolute inset-0 bg-black/40 pointer-events-none" />}
+        {!hero.image && (
+          <span
+            aria-hidden
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[14rem] leading-none pointer-events-none select-none"
+            style={{ opacity: 0.07 }}
+          >
+            🤝
+          </span>
+        )}
         <div className="container mx-auto px-4 relative">
           <div className="max-w-2xl">
             <span className="badge badge-accent mb-4">โปรแกรม Affiliate</span>
@@ -75,7 +105,7 @@ export default function AffiliatePage() {
               เข้าร่วมโปรแกรม Affiliate ของ Solar Thani สมัครฟรี แชร์ลิงก์แนะนำ แล้วรับค่าคอมมิชชันเมื่อลูกค้าที่คุณแนะนำปิดงานและชำระเงินจริงกับผู้ติดตั้งในไดเรกทอรีของเรา
             </p>
             <div className="flex flex-wrap gap-3">
-              <a href="#signup" className="btn btn-lg bg-white text-[var(--color-primary)] hover:bg-white/90">
+              <a href="#signup" className="btn btn-lg btn-primary">
                 สมัครเข้าร่วมฟรี
               </a>
               <Link href="/affiliate/login" className="btn btn-lg btn-outline-white">

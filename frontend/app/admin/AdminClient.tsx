@@ -807,6 +807,10 @@ function ContentTab({ contentMap, onSave }: { contentMap: Record<string, string>
           hint: 'พื้นหลังแถบ Header บนหน้า /contact' },
         { key: 'contact_header_pos',   label: '↳ ตำแหน่งรูป (ติดต่อเรา)',            type: 'select', options: POS_OPTIONS },
         { key: 'contact_header_size',  label: '↳ ขนาด/ซูม (ติดต่อเรา)',              type: 'select', options: SIZE_OPTIONS },
+        { key: 'affiliate_header_image', label: 'รูป Banner หน้า Affiliate',         type: 'image-upload',
+          hint: 'พื้นหลัง Hero บนหน้า /affiliate ถ้าไม่ตั้งค่าจะใช้พื้นหลังไล่สีเริ่มต้น' },
+        { key: 'affiliate_header_pos',   label: '↳ ตำแหน่งรูป (Affiliate)',          type: 'select', options: POS_OPTIONS },
+        { key: 'affiliate_header_size',  label: '↳ ขนาด/ซูม (Affiliate)',            type: 'select', options: SIZE_OPTIONS },
       ],
     },
   ];
