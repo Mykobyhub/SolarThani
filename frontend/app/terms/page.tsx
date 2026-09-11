@@ -13,7 +13,7 @@ export interface TermsData  { updatedDate: string; contactEmail: string; section
 
 export const TERMS_DEFAULTS: TermsData = {
   updatedDate: '1 กรกฎาคม 2568',
-  contactEmail: 'info@solardirectory.co.th',
+  contactEmail: 'support@solarthani.com',
   sections: [
     {
       id: 'terms',

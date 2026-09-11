@@ -927,7 +927,7 @@ interface TermsData { updatedDate: string; contactEmail: string; sections: Terms
 
 const TERMS_DEFAULTS: TermsData = {
   updatedDate: '1 กรกฎาคม 2568',
-  contactEmail: 'info@solardirectory.co.th',
+  contactEmail: 'support@solarthani.com',
   sections: [
     { id: 'terms', title: '1. เงื่อนไขการใช้งาน', content: [
       { sub: '1.1 การยอมรับเงื่อนไข', body: 'การใช้งานเว็บไซต์นี้หรือการลงทะเบียนเป็นผู้ให้บริการถือว่าคุณได้อ่าน เข้าใจ และยอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัวทั้งหมด หากคุณไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้งานเว็บไซต์' },
