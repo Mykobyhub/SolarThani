@@ -487,3 +487,14 @@ ALTER TABLE installers ADD COLUMN omise_recipient_id TEXT;
 -- already-live Neon DB.
 ALTER TABLE installers ADD COLUMN payout_recipient_type TEXT DEFAULT 'individual';
 ALTER TABLE installers ADD COLUMN payout_tax_id TEXT;
+
+-- Installer liability-insurance verification. insurance_verified_at mirrors verified_at's manual
+-- admin-checks-the-document-off-platform pattern, but insurance genuinely lapses (unlike general
+-- verification), so insurance_expires_at is required too — the public badge only shows while
+-- both are set AND the expiry date hasn't passed. provider/policy_number are admin-only reference
+-- fields, not shown publicly. See scripts/migrate-installer-insurance.mjs for the idempotent
+-- migration applied against the already-live Neon DB.
+ALTER TABLE installers ADD COLUMN insurance_verified_at TIMESTAMP;
+ALTER TABLE installers ADD COLUMN insurance_expires_at DATE;
+ALTER TABLE installers ADD COLUMN insurance_provider TEXT;
+ALTER TABLE installers ADD COLUMN insurance_policy_number TEXT;

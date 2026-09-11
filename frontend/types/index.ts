@@ -56,6 +56,10 @@ export interface Installer {
   payout_recipient_type: 'individual' | 'corporation' | null;
   payout_tax_id: string | null;
   omise_recipient_id: string | null;
+  insurance_verified_at: string | null;
+  insurance_expires_at: string | null;
+  insurance_provider: string | null;
+  insurance_policy_number: string | null;
 }
 
 export type InstallerPublic = Omit<Installer, 'password_hash' | 'oauth_id'>;

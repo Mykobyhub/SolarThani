@@ -91,7 +91,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     tiktok_url: body.tiktok_url === undefined ? existing.tiktok_url : (body.tiktok_url ? String(body.tiktok_url).trim() : null),
     facebook_url: body.facebook_url === undefined ? existing.facebook_url : (body.facebook_url ? String(body.facebook_url).trim() : null),
     website_url: body.website_url === undefined ? existing.website_url : (body.website_url ? String(body.website_url).trim() : null),
+    insurance_verified: body.insurance_verified === undefined ? Boolean(existing.insurance_verified_at) : Boolean(body.insurance_verified),
+    insurance_expires_at: str(body.insurance_expires_at, existing.insurance_expires_at),
+    insurance_provider: str(body.insurance_provider, existing.insurance_provider),
+    insurance_policy_number: str(body.insurance_policy_number, existing.insurance_policy_number),
   };
+  // Admin re-checks the "verified" checkbox every save — only stamp a fresh insurance_verified_at
+  // the moment it flips from unchecked to checked, same idea as the standalone verified_at toggle.
+  const insuranceVerifiedAt = v.insurance_verified ? (existing.insurance_verified_at ?? new Date().toISOString()) : null;
 
   await db.prepare(`
     UPDATE installers SET
@@ -102,7 +109,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       warranty_panel=?, warranty_inverter=?, warranty_workmanship=?,
       services=?, certifications=?, projects=?, service_provinces=?,
       is_featured=?, featured_from=?, featured_until=?,
-      youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?
+      youtube_url=?, tiktok_url=?, facebook_url=?, website_url=?,
+      insurance_verified_at=?, insurance_expires_at=?, insurance_provider=?, insurance_policy_number=?
     WHERE id=?
   `).run(
     v.name, v.email, v.phone, v.location, v.about, v.description, v.contact_email,
@@ -113,6 +121,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     v.services, v.certifications, v.projects, v.service_provinces,
     v.is_featured, v.featured_from, v.featured_until,
     v.youtube_url, v.tiktok_url, v.facebook_url, v.website_url,
+    insuranceVerifiedAt, v.insurance_expires_at, v.insurance_provider, v.insurance_policy_number,
     id
   );
 

@@ -131,6 +131,9 @@ export default async function InstallerDetailPage({ params }: Props) {
   const certifications = parseListField(inst.certifications);
   const projects      = safeJson<{ name: string; savings: string }[]>(inst.projects, []);
   const areaServed    = parseListField(inst.service_provinces);
+  // Unlike verified_at, an insurance policy genuinely lapses — only show the badge while
+  // admin-verified AND the recorded expiry date hasn't passed yet.
+  const hasValidInsurance = Boolean(inst.insurance_verified_at) && Boolean(inst.insurance_expires_at) && new Date(inst.insurance_expires_at!) >= new Date();
 
   const pageUrl = `${SITE_URL}/installers/${inst.id}`;
 
@@ -227,6 +230,7 @@ export default async function InstallerDetailPage({ params }: Props) {
                 {inst.verified_at && <span className="tbadge green">✓ ตรวจสอบแล้ว</span>}
                 <span className="tbadge amber">⭐ {inst.experience}+ ปีประสบการณ์</span>
                 {certifications.some((c) => /iso/i.test(c)) && <span className="tbadge blue">📜 ISO Certified</span>}
+                {hasValidInsurance && <span className="tbadge blue">🛡️ มีประกันงาน</span>}
                 {inst.founded_year && <span className="tbadge blue">ก่อตั้ง {inst.founded_year}</span>}
               </div>
               {/* Stars */}

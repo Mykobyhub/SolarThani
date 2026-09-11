@@ -65,6 +65,10 @@ export default function EditInstallerClient({ installer }: { installer: Installe
     is_featured: !!installer.is_featured,
     featured_from: installer.featured_from ? String(installer.featured_from).slice(0, 10) : '',
     featured_until: installer.featured_until ? String(installer.featured_until).slice(0, 10) : '',
+    insurance_verified: !!installer.insurance_verified_at,
+    insurance_expires_at: installer.insurance_expires_at ? String(installer.insurance_expires_at).slice(0, 10) : '',
+    insurance_provider: installer.insurance_provider || '',
+    insurance_policy_number: installer.insurance_policy_number || '',
   });
 
   function showAlert(type: 'success' | 'error', msg: string) {
@@ -79,6 +83,10 @@ export default function EditInstallerClient({ installer }: { installer: Installe
   async function handleSave() {
     if (!form.name.trim() || !form.email.trim()) {
       showAlert('error', 'กรุณากรอกชื่อบริษัทและอีเมลให้ครบ');
+      return;
+    }
+    if (form.insurance_verified && !form.insurance_expires_at) {
+      showAlert('error', 'กรุณาระบุวันหมดอายุกรมธรรม์ก่อนติ๊กว่าตรวจสอบแล้ว');
       return;
     }
     setSaving(true);
@@ -245,6 +253,34 @@ export default function EditInstallerClient({ installer }: { installer: Installe
               <div className="form-group">
                 <label className="form-label">งานติดตั้ง</label>
                 <input className="form-input" value={form.warranty_workmanship} onChange={(e) => set('warranty_workmanship', e.target.value)} />
+              </div>
+            </div>
+          </section>
+
+          {/* ประกันภัยความรับผิด */}
+          <section>
+            <h2 className="font-semibold text-sm mb-3 text-[var(--color-muted)]">ประกันภัยความรับผิด (แสดงเป็นป้าย 🛡️ มีประกันงาน)</h2>
+            <p className="form-hint mb-3">
+              ตรวจสอบกรมธรรม์ประกันภัยความรับผิดต่อบุคคลที่สาม / Contractor&apos;s All Risk ของผู้ติดตั้งด้วยตนเองก่อนติ๊ก —
+              เช่น ชื่อผู้เอาประกันตรงกับชื่อบริษัท, กรมธรรม์ยังไม่หมดอายุ, บริษัทประกันมีใบอนุญาตจริง (ตรวจสอบได้ที่ oic.or.th)
+              ป้ายจะแสดงเฉพาะเมื่อติ๊กแล้วและยังไม่ถึงวันหมดอายุเท่านั้น
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.insurance_verified} onChange={(e) => set('insurance_verified', e.target.checked)} />
+                🛡️ ตรวจสอบกรมธรรม์แล้ว
+              </label>
+              <div className="form-group">
+                <label className="form-label">วันหมดอายุกรมธรรม์</label>
+                <input type="date" className="form-input" value={form.insurance_expires_at} onChange={(e) => set('insurance_expires_at', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">บริษัทประกัน (ใช้ภายใน)</label>
+                <input className="form-input" value={form.insurance_provider} onChange={(e) => set('insurance_provider', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">เลขกรมธรรม์ (ใช้ภายใน)</label>
+                <input className="form-input" value={form.insurance_policy_number} onChange={(e) => set('insurance_policy_number', e.target.value)} />
               </div>
             </div>
           </section>
