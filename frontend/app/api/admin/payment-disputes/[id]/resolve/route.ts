@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
 import { getPaymentProvider } from '@/lib/payment/provider';
 import { insertTransaction, recomputeProjectStatus, type PaymentDisputeRow, type PaymentMilestoneRow, type PaymentProjectRow } from '@/lib/payment/service';
-import { notifyDisputeResolved } from '@/lib/payment/notify';
+import { notifyDisputeResolved, notifyAdminTransferFailed } from '@/lib/payment/notify';
 import { stripTags } from '@/lib/sanitize';
 import { createCommissionsForReleasedMilestone, clawbackCommissionsForMilestone } from '@/lib/affiliate/commission-service';
 
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .get(milestone.id)) as { provider_reference_id: string | null } | undefined;
 
   const provider = await getPaymentProvider();
+  const project = (await db.prepare('SELECT * FROM payment_projects WHERE id = ?').get(milestone.project_id)) as PaymentProjectRow | undefined;
 
   // Set for the release branch only, to (a) skip marking the milestone 'released' /
   // creating the affiliate commission until the payout is actually confirmed, and (b) tailor
@@ -54,7 +55,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       amount: milestone.amount,
       milestoneId: milestone.id,
     });
-    if (!result.success) return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ' }, { status: 502 });
+    if (!result.success) {
+      if (project) {
+        notifyAdminTransferFailed(project, milestone, { reason: 'releaseHold ถูกปฏิเสธทันทีตอนเรียก Omise API — ดู server log สำหรับรายละเอียด' }).catch(() => {});
+      }
+      return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ' }, { status: 502 });
+    }
     await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount, status: result.status });
     releaseStatus = result.status;
 
@@ -104,7 +110,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   await recomputeProjectStatus(milestone.project_id);
 
-  const project = (await db.prepare('SELECT * FROM payment_projects WHERE id = ?').get(milestone.project_id)) as PaymentProjectRow | undefined;
   // Fire-and-forget — same pattern as the rest of the app's email sends (e.g. api/contact):
   // notifications must never block this response on slow/unreachable SMTP or LINE.
   if (project) notifyDisputeResolved(project, milestone, action).catch(() => {});

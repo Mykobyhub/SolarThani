@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getPaymentProvider } from '@/lib/payment/provider';
 import { getProjectByToken, insertTransaction, recomputeProjectStatus, type PaymentMilestoneRow } from '@/lib/payment/service';
-import { notifyCustomerDecision } from '@/lib/payment/notify';
+import { notifyCustomerDecision, notifyAdminTransferFailed } from '@/lib/payment/notify';
 import { createCommissionsForReleasedMilestone } from '@/lib/affiliate/commission-service';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const provider = await getPaymentProvider();
   const result = await provider.releaseHold({ holdReferenceId: hold?.provider_reference_id || '', amount: milestone.amount, milestoneId: milestone.id });
-  if (!result.success) return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ กรุณาลองใหม่' }, { status: 502 });
+  if (!result.success) {
+    // Rejected synchronously by the provider (e.g. installer has no payout bank details on
+    // file) — the customer sees the error immediately, but admin needs to know too since the
+    // customer can't fix this themselves. See webhook route for the async transfer.fail case.
+    notifyAdminTransferFailed(project, milestone, { reason: 'releaseHold ถูกปฏิเสธทันทีตอนเรียก Omise API — ดู server log สำหรับรายละเอียด (มักเกิดจากผู้ติดตั้งยังไม่กรอกข้อมูลบัญชีรับเงิน)' }).catch(() => {});
+    return NextResponse.json({ success: false, message: 'ปล่อยเงินไม่สำเร็จ กรุณาลองใหม่' }, { status: 502 });
+  }
 
   await insertTransaction({ milestoneId: milestone.id, type: 'release', provider: provider.name, providerReferenceId: result.referenceId, amount: milestone.amount, status: result.status });
 

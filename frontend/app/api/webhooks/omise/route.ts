@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getOmiseConfig, activeOmiseSecretKey } from '@/lib/payment/omise-provider';
-import { recomputeProjectStatus, type PaymentMilestoneRow } from '@/lib/payment/service';
-import { notifyPaymentReceived, notifyCustomerDecision } from '@/lib/payment/notify';
+import { recomputeProjectStatus, type PaymentMilestoneRow, type PaymentProjectRow } from '@/lib/payment/service';
+import { notifyPaymentReceived, notifyCustomerDecision, notifyAdminTransferFailed } from '@/lib/payment/notify';
 import { createCommissionsForReleasedMilestone } from '@/lib/affiliate/commission-service';
 
 export const dynamic = 'force-dynamic';
@@ -26,8 +26,9 @@ interface OmiseWebhookEvent {
 //    successful charge flips the milestone pending_payment -> paid_hold.
 //  - transfer.paid / transfer.fail: reconciles the matching 'release' payment_transactions
 //    row, and on a paid transfer flips the milestone to 'released' (+ affiliate commission).
-//    On a failed transfer the milestone is left as-is and the failure is logged loudly —
-//    there is no admin-facing alert surface for this yet (follow-up).
+//    On a failed transfer the milestone is left as-is and an admin alert email is sent
+//    (notifyAdminTransferFailed) in addition to the server-log line — this is real money that
+//    didn't reach the installer, so it must not rely on someone watching logs to notice.
 // Refunds are not handled here — Omise processes refunds for the payment methods this app
 // uses (PromptPay) synchronously, so refundHold() already returns a final status with no
 // webhook round-trip needed.
@@ -127,11 +128,14 @@ async function handleTransferEvent(transferId: string, secretKey: string): Promi
   if (!paid) {
     // Transfer failed — deliberately NOT silently swallowed: this is real money that didn't
     // reach the installer after the milestone was already marked as being released/resolved.
-    // There's no admin-facing alert surface for this yet (flagged as a follow-up) so this
-    // console.error, with the ids needed to find and fix it by hand, is the only signal today.
     console.error(
       `[omise webhook] TRANSFER FAILED — installer was NOT paid. transfer=${transferId} milestone=${milestone.id} project=${milestone.project_id} amount=${milestone.amount}. Needs manual admin follow-up.`
     );
+    const project = (await db.prepare('SELECT * FROM payment_projects WHERE id = ?').get(milestone.project_id)) as PaymentProjectRow | undefined;
+    if (project) {
+      const reason = (transfer.failure_message as string) || (transfer.failure_code as string) || 'Omise ไม่ได้ระบุสาเหตุ (ดู transfer id ใน Omise dashboard)';
+      notifyAdminTransferFailed(project, milestone, { transferId, reason }).catch(() => {});
+    }
     return;
   }
 

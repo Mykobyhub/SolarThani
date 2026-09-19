@@ -126,6 +126,37 @@ export async function notifyDisputeResolved(
   ]);
 }
 
+/**
+ * Admin-facing alert for a failed installer payout (Omise Transfer) — the one gap flagged as a
+ * follow-up when the Recipient API integration shipped: previously only a console.error, with
+ * no one actually watching server logs for it. Reuses the same support_email-first /
+ * ADMIN_EMAIL-fallback destination as the contact-form admin notify (app/api/contact-message/route.ts),
+ * not the per-party channel system above — there's no "party" here, just whoever runs the site.
+ */
+export async function notifyAdminTransferFailed(
+  project: PaymentProjectRow,
+  milestone: PaymentMilestoneRow,
+  details: { transferId?: string; reason: string }
+): Promise<void> {
+  const supportEmail =
+    ((await db.prepare(`SELECT value FROM site_content WHERE key='support_email'`).get()) as { value: string } | undefined)?.value ||
+    process.env.ADMIN_EMAIL ||
+    '';
+  if (!supportEmail) return;
+  const html = await mail.buildTransferFailedAlertEmail({
+    projectTitle: project.title,
+    seq: milestone.seq,
+    amount: milestone.amount,
+    transferId: details.transferId,
+    reason: details.reason,
+  });
+  await sendEmail({
+    to: supportEmail,
+    subject: `⚠️ โอนเงินไม่สำเร็จ — งวดที่ ${milestone.seq} ของ "${project.title}"`,
+    html,
+  }).catch((err) => console.error('[notify] admin transfer-failed alert email failed', err));
+}
+
 export async function notifyProjectCancelled(project: PaymentProjectRow, requestedBy: 'customer' | 'installer' | 'admin'): Promise<void> {
   const requestedByLabel = requestedBy === 'customer' ? 'ลูกค้า' : requestedBy === 'installer' ? 'ผู้ติดตั้ง' : 'ผู้ดูแลระบบ';
   const installer = await getInstallerContact(project.installer_id);

@@ -280,6 +280,29 @@ export async function buildDisputeResolvedEmail(recipientName: string, projectTi
   );
 }
 
+export async function buildTransferFailedAlertEmail(opts: {
+  projectTitle: string;
+  seq: number;
+  amount: number;
+  transferId?: string;
+  reason: string;
+}): Promise<string> {
+  const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  return emailLayout(
+    `โอนเงินให้ผู้ติดตั้งไม่สำเร็จ — งวดที่ ${opts.seq}`,
+    `<h2 style="color:#dc2626;">⚠️ โอนเงินไม่สำเร็จ — ต้องตรวจสอบด่วน</h2>
+     <p>การโอนเงินให้ผู้ติดตั้งสำหรับงวดที่ ${opts.seq} ของโครงการ <strong>${opts.projectTitle}</strong> ล้มเหลว ลูกค้าอาจชำระเงินแล้วแต่เงินยังไม่ถึงผู้ติดตั้ง กรุณาตรวจสอบและดำเนินการด้วยตนเอง</p>
+     <table cellpadding="8" style="width:100%;border-collapse:collapse;background:#fff5f5;border-radius:8px;margin:12px 0">
+       <tr><td style="font-weight:600;color:#6b7c7a;width:140px">โครงการ</td><td>${opts.projectTitle}</td></tr>
+       <tr style="background:#fff"><td style="font-weight:600;color:#6b7c7a">งวดที่</td><td>${opts.seq}</td></tr>
+       <tr><td style="font-weight:600;color:#6b7c7a">จำนวนเงิน</td><td>฿${Math.round(opts.amount).toLocaleString('th-TH')}</td></tr>
+       ${opts.transferId ? `<tr style="background:#fff"><td style="font-weight:600;color:#6b7c7a">Transfer ID</td><td>${opts.transferId}</td></tr>` : ''}
+       <tr style="${opts.transferId ? '' : 'background:#fff'}"><td style="font-weight:600;color:#6b7c7a">สาเหตุ</td><td>${opts.reason}</td></tr>
+     </table>
+     <p><a href="${appUrl}/admin" style="display:inline-block;padding:10px 20px;background:#dc2626;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">ตรวจสอบใน Admin →</a></p>`
+  );
+}
+
 export async function buildProjectCancelledEmail(recipientName: string, projectTitle: string, requestedBy: string): Promise<string> {
   return emailLayout(
     `โครงการ ${projectTitle} ถูกยกเลิก`,
